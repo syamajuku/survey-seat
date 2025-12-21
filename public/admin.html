@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>運営用：集計 & 座席割り当て</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; margin: 24px; line-height: 1.5; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+    .btn { padding: 10px 14px; border: 1px solid #333; border-radius: 10px; background: #fff; cursor: pointer; }
+    .btn.primary { background: #111; color: #fff; border-color: #111; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; font-size: 14px; }
+    th { background: #f6f6f6; }
+    .seat { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin-top: 12px; }
+    .blocks { display: flex; flex-wrap: wrap; gap: 10px; }
+    .block { border: 1px solid #ccc; border-radius: 12px; padding: 10px 12px; min-width: 220px; }
+    .tag { font-size: 12px; color: #666; }
+    .name { font-weight: 700; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>集計 & 座席割り当て（隣同士ペア）</h1>
+  <div class="tag">URL: <span class="mono" id="url"></span></div>
+
+  <div class="row">
+    <button class="btn primary" id="refreshBtn">最新を読み込む</button>
+    <button class="btn" id="csvBtn">座席CSVをダウンロード</button>
+    <button class="btn" id="resetBtn">全回答をリセット（注意）</button>
+  </div>
+
+  <div id="summary" class="seat"></div>
+  <div id="seatBlocks" class="seat"></div>
+
+  <h2 style="font-size:16px; margin-top:18px;">回答一覧</h2>
+  <div id="tableWrap"></div>
+</div>
+
+<script>
+  document.getElementById("url").textContent = location.origin;
+
+  function yn(b){ return b ? "Yes" : "No"; }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[c]));
+  }
+
+  async function loadAll(){
+    const [resp, asg] = await Promise.all([
+      fetch("/api/responses").then(r => r.json()),
+      fetch("/api/assignments").then(r => r.json())
+    ]);
+
+    if (!resp.ok || !asg.ok) throw new Error("load failed");
+
+    renderSummary(resp, asg);
+    renderBlocks(asg);
+    renderTable(resp);
+    window.__seatRows = asg.seatRows || [];
+  }
+
+  function renderSummary(resp, asg){
+    const n = resp.count;
+    const yes = (resp.rows || []).filter(r => r.q3 === true).length;
+    const no  = (resp.rows || []).filter(r => r.q3 === false).length;
+
+    document.getElementById("summary").innerHTML = `
+      <div><b>回答数：</b>${n}名</div>
+      <div class="tag">Q3=Yes（違いを楽しむ）：${yes}名 / Q3=No（安心重視）：${no}名</div>
+      <div class="tag">座席は「隣同士」でペア化。余りが出た場合は3人ブロックになります。</div>
+    `;
+  }
+
+  function renderBlocks(asg){
+    const blocks = asg.blocks || [];
+    const html = blocks.map((b, idx) => {
+      const members = (b.members || []).map(m => `
+        <div style="margin-top:6px;">
+          <div class="name">${escapeHtml(m.name)}</div>
+          <div class="tag">${yn(m.q1)} / ${yn(m.q2)} / Q3:${yn(m.q3)} / Q4:${yn(m.q4)}</div>
+          <div class="tag">自慢：${escapeHtml(m.q5)}</div>
+        </div>
+      `).join("");
+
+      return `
+        <div class="block">
+          <div class="tag">ブロック${idx+1}（${b.type}）</div>
+          ${members}
+        </div>
+      `;
+    }).join("");
+
+    document.getElementById("seatBlocks").innerHTML = `
+      <div><b>座席ブロック（左→右に並べて配置）</b></div>
+      <div class="tag">例： [A][B] [C][D] ...（pair） / [A][B][C]（triad）</div>
+      <div class="blocks" style="margin-top:10px;">${html || "<div class='tag'>まだ回答がありません</div>"}</div>
+    `;
+  }
+
+  function renderTable(resp){
+    const rows = resp.rows || [];
+    if (rows.length === 0) {
+      document.getElementById("tableWrap").innerHTML = "<div class='tag'>まだ回答がありません</div>";
+      return;
+    }
+    const html = `
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>名前</th>
+            <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th>
+            <th>Q5（自慢）</th>
+            <th>回答時刻</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i)=>`
+            <tr>
+              <td>${i+1}</td>
+              <td>${escapeHtml(r.name)}</td>
+              <td>${yn(r.q1)}</td>
+              <td>${yn(r.q2)}</td>
+              <td>${yn(r.q3)}</td>
+              <td>${yn(r.q4)}</td>
+              <td>${escapeHtml(r.q5)}</td>
+              <td class="mono">${escapeHtml(r.created_at || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+    document.getElementById("tableWrap").innerHTML = html;
+  }
+
+  function downloadCsv(rows){
+    const header = ["seat","blockType","name","q1","q2","q3","q4","q5"];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      const line = header.map(k => `"${String(r[k] ?? "").replace(/"/g,'""')}"`).join(",");
+      lines.push(line);
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "seat_assignments.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById("refreshBtn").addEventListener("click", async () => {
+    await loadAll();
+    alert("更新しました");
+  });
+
+  document.getElementById("csvBtn").addEventListener("click", () => {
+    downloadCsv(window.__seatRows || []);
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", async () => {
+    if (!confirm("全回答を削除します。本当に実行しますか？")) return;
+    await fetch("/api/reset", { method: "POST" });
+    await loadAll();
+    alert("リセットしました");
+  });
+
+  loadAll().catch(e => {
+    alert("読み込みに失敗しました: " + e.message);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,261 @@
+import express from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+app.use(express.json({ limit: "1mb" }));
+
+const DATA_DIR = path.join(__dirname, "data");
+const DATA_FILE = path.join(DATA_DIR, "responses.json");
+const PUBLIC_DIR = path.join(__dirname, "public");
+
+function ensureDataFile() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]), "utf-8");
+}
+
+function loadResponses() {
+  ensureDataFile();
+  return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+}
+
+function saveResponses(rows) {
+  ensureDataFile();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(rows, null, 2), "utf-8");
+}
+
+function boolize(v) {
+  // Accept true/false, "Yes"/"No", "yes"/"no"
+  if (typeof v === "boolean") return v;
+  const s = String(v ?? "").toLowerCase().trim();
+  if (["yes", "y", "true", "1"].includes(s)) return true;
+  if (["no", "n", "false", "0"].includes(s)) return false;
+  return null;
+}
+
+function validatePayload(p) {
+  const name = String(p.name ?? "").trim();
+  const q1 = boolize(p.q1);
+  const q2 = boolize(p.q2);
+  const q3 = boolize(p.q3);
+  const q4 = boolize(p.q4);
+  const q5 = String(p.q5 ?? "").trim();
+
+  if (!name) return { ok: false, error: "名前（ニックネーム）を入力してください。" };
+  if ([q1, q2, q3, q4].some(v => v === null)) return { ok: false, error: "Q1〜Q4はYes/Noで回答してください。" };
+  if (!q5) return { ok: false, error: "Q5（自慢）を入力してください。" };
+
+  return { ok: true, value: { name, q1, q2, q3, q4, q5 } };
+}
+
+/**
+ * Seat assignment logic
+ * - Pair neighbors: [A][B] [C][D] ...
+ * - Q3=No: pair "similar" on Q1/Q2 (min Hamming distance)
+ * - Q3=Yes: pair "different" on Q1/Q2 (max Hamming distance, prefer at least 1 diff)
+ * - Q4 used only for left/right swap: q4=false => talker => left, q4=true => listener => right (best-effort)
+ * - If leftover person exists, attach to best pair (triad) based on compatibility score
+ */
+function hammingQ1Q2(a, b) {
+  let d = 0;
+  if (a.q1 !== b.q1) d++;
+  if (a.q2 !== b.q2) d++;
+  return d; // 0..2
+}
+
+function makePairsSimilar(list) {
+  // Greedy: repeatedly pick a and best match with minimum distance
+  const pool = [...list];
+  const pairs = [];
+  while (pool.length >= 2) {
+    const a = pool.shift();
+    let bestIdx = 0;
+    let bestScore = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const b = pool[i];
+      const d = hammingQ1Q2(a, b);
+      if (d < bestScore) {
+        bestScore = d;
+        bestIdx = i;
+      }
+    }
+    const b = pool.splice(bestIdx, 1)[0];
+    pairs.push([a, b]);
+  }
+  return { pairs, leftover: pool[0] ?? null };
+}
+
+function makePairsDifferent(list) {
+  // Greedy: pick a and best match with maximum distance
+  const pool = [...list];
+  const pairs = [];
+  while (pool.length >= 2) {
+    const a = pool.shift();
+    let bestIdx = 0;
+    let bestScore = -1;
+    for (let i = 0; i < pool.length; i++) {
+      const b = pool[i];
+      const d = hammingQ1Q2(a, b);
+      // Prefer d=2 > d=1 > d=0
+      if (d > bestScore) {
+        bestScore = d;
+        bestIdx = i;
+      }
+    }
+    const b = pool.splice(bestIdx, 1)[0];
+    pairs.push([a, b]);
+  }
+  return { pairs, leftover: pool[0] ?? null };
+}
+
+function orderLeftRight(pair) {
+  const [a, b] = pair;
+  // Q4: true => listener => right; false => talker => left
+  // If both same, keep order.
+  if (a.q4 === false && b.q4 === true) return [a, b];
+  if (a.q4 === true && b.q4 === false) return [b, a];
+  return [a, b];
+}
+
+function pairCompatibility(pair, x) {
+  // Higher is better
+  // For Q3=No people, we value similarity; for Q3=Yes, value difference.
+  // Here: try to keep "conversation depth" compatible using Q1/Q2 closeness and Q4 balance.
+  const [a, b] = pair;
+  const da = hammingQ1Q2(a, x);
+  const db = hammingQ1Q2(b, x);
+  // Prefer attaching where x is not too far from both (avoid friction): (2 - avgDist)
+  const base = 2 - (da + db) / 2; // range ~0..2
+  // Prefer Q4 mix in the triad (not all listeners or all talkers)
+  const q4Vals = [a.q4, b.q4, x.q4];
+  const numListeners = q4Vals.filter(v => v === true).length;
+  const balanceBonus = (numListeners === 1 || numListeners === 2) ? 0.3 : 0;
+  return base + balanceBonus;
+}
+
+function assignSeats(responses) {
+  // Deterministic order by created_at then name
+  const rows = [...responses].sort((r1, r2) => {
+    const t = (r1.created_at ?? "").localeCompare(r2.created_at ?? "");
+    if (t !== 0) return t;
+    return r1.name.localeCompare(r2.name);
+  });
+
+  const yesGroup = rows.filter(r => r.q3 === true);
+  const noGroup = rows.filter(r => r.q3 === false);
+
+  const yesRes = makePairsDifferent(yesGroup);
+  const noRes = makePairsSimilar(noGroup);
+
+  let pairs = [...yesRes.pairs, ...noRes.pairs].map(orderLeftRight);
+
+  const leftovers = [yesRes.leftover, noRes.leftover].filter(Boolean);
+
+  // If there are leftovers (0,1,2), attach them to best pairs one by one
+  const triads = [];
+  for (const x of leftovers) {
+    if (pairs.length === 0) {
+      // If no pair exists, keep as standalone (rare: only 1 person total)
+      triads.push([x]);
+      continue;
+    }
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < pairs.length; i++) {
+      const score = pairCompatibility(pairs[i], x);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    const basePair = pairs.splice(bestIdx, 1)[0];
+    triads.push([...basePair, x]);
+  }
+
+  // Create seat blocks: pairs first, then triads
+  // You can render as [A][B] blocks; triad as [A][B][C]
+  const blocks = [
+    ...pairs.map(p => ({ type: "pair", members: p })),
+    ...triads.map(t => ({ type: t.length === 3 ? "triad" : "solo", members: t }))
+  ];
+
+  // For nicer layout, put triads at the end
+  return blocks;
+}
+
+// --- API ---
+app.get("/api/health", (req, res) => res.json({ ok: true }));
+
+app.get("/api/responses", (req, res) => {
+  const rows = loadResponses();
+  res.json({ ok: true, count: rows.length, rows });
+});
+
+app.post("/api/responses", (req, res) => {
+  const v = validatePayload(req.body);
+  if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
+
+  const rows = loadResponses();
+  const now = new Date().toISOString();
+  const record = { id: cryptoRandomId(), created_at: now, ...v.value };
+
+  // name duplicates allowed, but if you want to overwrite by same name, do it here.
+  rows.push(record);
+  saveResponses(rows);
+  res.json({ ok: true, record });
+});
+
+app.post("/api/reset", (req, res) => {
+  // Simple reset endpoint (protect with a password if needed)
+  saveResponses([]);
+  res.json({ ok: true });
+});
+
+app.get("/api/assignments", (req, res) => {
+  const rows = loadResponses();
+  const blocks = assignSeats(rows);
+
+  // Provide CSV-friendly rows
+  // SeatIndex increments across blocks, within block left-to-right
+  const seatRows = [];
+  let seatIndex = 1;
+  for (const block of blocks) {
+    for (const m of block.members) {
+      seatRows.push({
+        seat: seatIndex++,
+        blockType: block.type,
+        name: m.name,
+        q1: m.q1 ? "Yes" : "No",
+        q2: m.q2 ? "Yes" : "No",
+        q3: m.q3 ? "Yes" : "No",
+        q4: m.q4 ? "Yes" : "No",
+        q5: m.q5
+      });
+    }
+  }
+
+  res.json({ ok: true, count: rows.length, blocks, seatRows });
+});
+
+// --- static pages ---
+app.use(express.static(PUBLIC_DIR));
+
+app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/admin", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "admin.html")));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  ensureDataFile();
+  console.log(`Survey running at http://localhost:${PORT}`);
+  console.log(`Admin at http://localhost:${PORT}/admin`);
+});
+
+// --- helpers ---
+function cryptoRandomId() {
+  // Simple random id without extra deps
+  return Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
+}
