@@ -138,53 +138,74 @@ function pairCompatibility(pair, x) {
 }
 
 function assignSeats(responses) {
-  // Deterministic order by created_at then name
-  const rows = [...responses].sort((r1, r2) => {
-    const t = (r1.created_at ?? "").localeCompare(r2.created_at ?? "");
-    if (t !== 0) return t;
-    return r1.name.localeCompare(r2.name);
-  });
+  const rows = [...responses];
 
-  const yesGroup = rows.filter(r => r.q3 === true);
-  const noGroup = rows.filter(r => r.q3 === false);
+  const noQ3 = rows.filter(r => r.q3 === false);
+  const yesQ3 = rows.filter(r => r.q3 === true);
 
-  const yesRes = makePairsDifferent(yesGroup);
-  const noRes = makePairsSimilar(noGroup);
+  const pairs = [];
 
-  let pairs = [...yesRes.pairs, ...noRes.pairs].map(orderLeftRight);
+  // ① Q3=No（安心重視）同士でまずペア
+  const used = new Set();
 
-  const leftovers = [yesRes.leftover, noRes.leftover].filter(Boolean);
+  function takePair(a, b) {
+    used.add(a.id);
+    used.add(b.id);
+    pairs.push(orderLeftRight([a, b]));
+  }
 
-  // If there are leftovers (0,1,2), attach them to best pairs one by one
-  const triads = [];
-  for (const x of leftovers) {
-    if (pairs.length === 0) {
-      // If no pair exists, keep as standalone (rare: only 1 person total)
-      triads.push([x]);
-      continue;
+  for (let i = 0; i < noQ3.length; i++) {
+    const a = noQ3[i];
+    if (used.has(a.id)) continue;
+
+    let best = null;
+    let bestScore = Infinity;
+
+    for (let j = i + 1; j < noQ3.length; j++) {
+      const b = noQ3[j];
+      if (used.has(b.id)) continue;
+      const d = hammingQ1Q2(a, b);
+      if (d < bestScore) {
+        bestScore = d;
+        best = b;
+      }
     }
+
+    if (best) takePair(a, best);
+  }
+
+  // ② 残りをまとめる
+  const remaining = rows.filter(r => !used.has(r.id));
+
+  // ③ 残りを2人組で作り切る
+  while (remaining.length >= 2) {
+    const a = remaining.shift();
+
     let bestIdx = 0;
-    let bestScore = -Infinity;
-    for (let i = 0; i < pairs.length; i++) {
-      const score = pairCompatibility(pairs[i], x);
-      if (score > bestScore) {
-        bestScore = score;
+    let bestScore = -1;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const b = remaining[i];
+      const d = hammingQ1Q2(a, b);
+      if (d > bestScore) {
+        bestScore = d;
         bestIdx = i;
       }
     }
-    const basePair = pairs.splice(bestIdx, 1)[0];
-    triads.push([...basePair, x]);
+
+    const b = remaining.splice(bestIdx, 1)[0];
+    pairs.push(orderLeftRight([a, b]));
   }
 
-  // Create seat blocks: pairs first, then triads
-  // You can render as [A][B] blocks; triad as [A][B][C]
-  const blocks = [
-    ...pairs.map(p => ({ type: "pair", members: p })),
-    ...triads.map(t => ({ type: t.length === 3 ? "triad" : "solo", members: t }))
-  ];
+  // ④ 1人だけ余った場合 → 1組だけ3人に
+  if (remaining.length === 1 && pairs.length > 0) {
+    pairs[0].push(remaining[0]); // 先頭の組に合流
+  }
 
-  // For nicer layout, put triads at the end
-  return blocks;
+  return pairs.map(p => ({
+    type: p.length === 3 ? "triad" : "pair",
+    members: p
+  }));
 }
 
 // --- API ---
