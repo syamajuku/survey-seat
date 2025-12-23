@@ -89,18 +89,15 @@
     const safe = (v) => (v ?? "").toString();
 
     async function loadAll() {
-      // ① 座席ブロック取得（あなたのAPI仕様に固定）
       const aRes = await fetch("/api/assignments", { cache: "no-store" });
       if (!aRes.ok) { alert("取得失敗: /api/assignments"); return; }
       const aJson = await aRes.json();
       const blocks = Array.isArray(aJson.blocks) ? aJson.blocks : [];
 
-      // ② 回答一覧取得（あなたのAPI仕様に固定）
       const rRes = await fetch("/api/responses", { cache: "no-store" });
       if (!rRes.ok) { alert("取得失敗: /api/responses"); return; }
       const responses = await rRes.json();
 
-      // メタ表示
       const meta = document.getElementById("metaBox");
       meta.innerHTML = `回答数：<strong>${safe(aJson.count ?? (Array.isArray(responses) ? responses.length : 0))}</strong> 名`;
 
@@ -117,4 +114,65 @@
       document.getElementById("metaBox").innerHTML = "リセットしました。";
     }
 
-    // ===== 4
+    // ===== 4人がけテーブル表示（2席×2列）=====
+    function renderSeats(blocks) {
+      const container = document.getElementById("seatResult");
+      container.innerHTML = "";
+
+      let tableNo = 1;
+
+      for (let i = 0; i < blocks.length; i += 2) {
+        const top = blocks[i];
+        const bottom = blocks[i + 1];
+
+        const el = document.createElement("div");
+        el.className = "table";
+        el.innerHTML = `
+          <div class="table-title">テーブル ${tableNo}</div>
+          <div class="row">
+            ${seatHtml(top, 0)}
+            ${seatHtml(top, 1)}
+          </div>
+          <div class="row">
+            ${seatHtml(bottom, 0)}
+            ${seatHtml(bottom, 1)}
+          </div>
+        `;
+        container.appendChild(el);
+        tableNo++;
+      }
+    }
+
+    function seatHtml(block, idx) {
+      if (!block || !Array.isArray(block.members) || !block.members[idx]) {
+        return `<div class="seat empty">空席</div>`;
+      }
+      const m = block.members[idx];
+      const name = safe(m.name || "（名前なし）");
+      const cls = (block.type === "triad") ? "seat solo" : "seat pair";
+      return `<div class="${cls}">${name}</div>`;
+    }
+
+    // ===== 回答一覧 =====
+    function renderAnswers(responses) {
+      const tbody = document.querySelector("#answerTable tbody");
+      tbody.innerHTML = "";
+
+      responses.forEach((r, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td class="name">${safe(r.name)}</td>
+          <td><span class="badge">${yn(r.q1)}</span></td>
+          <td><span class="badge">${yn(r.q2)}</span></td>
+          <td><span class="badge">${yn(r.q3)}</span></td>
+          <td><span class="badge">${yn(r.q4)}</span></td>
+          <td>${safe(r.q5)}</td>
+          <td>${safe(r.created_at || r.createdAt || "")}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  </script>
+</body>
+</html>
