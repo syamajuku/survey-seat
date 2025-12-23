@@ -4,55 +4,158 @@
   <meta charset="UTF-8" />
   <title>運営用｜座席割り当て</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body{
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-      background:#f5f5f5; margin:0; padding:20px; color:#111;
+      background:#f5f5f5;
+      margin:0;
+      padding:20px;
+      color:#111;
     }
-    h1{margin:0 0 12px 0; font-size:40px; font-weight:900;}
-    h2{margin:24px 0 10px 0; font-size:22px;}
 
-    .controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
-    button{padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-weight:800;}
+    h1{
+      margin:0 0 12px 0;
+      font-size:40px;
+      font-weight:900;
+    }
+
+    h2{
+      margin:28px 0 10px 0;
+      font-size:22px;
+    }
+
+    .controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+
+    button{
+      padding:10px 14px;
+      border:none;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:14px;
+    }
+
     .btn-primary{background:#2563eb; color:#fff;}
     .btn-danger{background:#dc2626; color:#fff;}
 
     .meta{
-      background:#fff; border:1px solid #e5e7eb; border-radius:12px;
-      padding:12px 14px; margin:10px 0 14px 0; font-size:14px;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:12px 14px;
+      margin:10px 0 14px 0;
+      font-size:14px;
     }
 
-    /* ===== 4人がけテーブル表示 ===== */
-    #seatResult{display:flex; flex-wrap:wrap; gap:14px;}
+    /* ===== 座席（4人がけテーブル） ===== */
+    #seatResult{
+      display:flex;
+      flex-wrap:wrap;
+      gap:16px;
+    }
+
     .table{
-      width:280px; background:#fafafa; border:2px solid #333; border-radius:12px;
+      width:280px;
+      background:#fafafa;
+      border:2px solid #333;
+      border-radius:12px;
       padding:12px;
     }
-    .table-title{font-weight:900; text-align:center; margin-bottom:10px;}
-    .row{display:flex; justify-content:space-between; margin-bottom:10px;}
+
+    .table-title{
+      font-weight:900;
+      text-align:center;
+      margin-bottom:10px;
+    }
+
+    .row{
+      display:flex;
+      justify-content:space-between;
+      margin-bottom:10px;
+    }
 
     .seat{
-      width:48%; min-height:48px;
-      display:flex; align-items:center; justify-content:center;
-      padding:12px 8px; border-radius:10px; box-sizing:border-box;
-      font-weight:900; text-align:center; word-break:break-word;
+      width:48%;
+      min-height:48px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:12px 8px;
+      border-radius:10px;
+      box-sizing:border-box;
+      font-weight:900;
+      text-align:center;
+      word-break:break-word;
     }
-    .seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
-    .seat.solo{background:#fff7ed; border:2px dashed #f97316;}
-    .seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
+
+    .seat.pair{
+      background:#dbeafe;
+      border:2px solid #3b82f6;
+    }
+
+    .seat.solo{
+      background:#fff7ed;
+      border:2px dashed #f97316;
+    }
+
+    .seat.empty{
+      background:#eee;
+      border:2px dashed #ccc;
+      color:#777;
+    }
 
     /* ===== 回答一覧 ===== */
     .table-wrap{
-      overflow-x:auto; background:#fff; border:1px solid #e5e7eb;
-      border-radius:12px; padding:10px;
+      overflow-x:auto;
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:10px;
     }
-    table{border-collapse:collapse; width:100%; min-width:820px; background:#fff;}
-    th,td{border:1px solid #ddd; padding:10px 8px; font-size:13px; text-align:center; white-space:nowrap;}
-    th{background:#f3f4f6; font-weight:900;}
-    td.name{text-align:left; font-weight:900;}
-    .badge{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ddd; background:#fff; font-weight:900; font-size:12px;}
+
+    table{
+      border-collapse:collapse;
+      width:100%;
+      min-width:820px;
+      background:#fff;
+    }
+
+    th, td{
+      border:1px solid #ddd;
+      padding:10px 8px;
+      font-size:13px;
+      text-align:center;
+      white-space:nowrap;
+    }
+
+    th{
+      background:#f3f4f6;
+      font-weight:900;
+    }
+
+    td.name{
+      text-align:left;
+      font-weight:900;
+    }
+
+    .badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      background:#fff;
+      font-weight:900;
+      font-size:12px;
+    }
   </style>
 </head>
+
 <body>
   <h1>運営用｜座席割り当て</h1>
 
@@ -61,10 +164,14 @@
     <button class="btn-danger" onclick="resetAll()">回答をリセット</button>
   </div>
 
-  <div class="meta" id="metaBox">読み込み前です。「最新を読み込む」を押してください。</div>
+  <div class="meta" id="metaBox">
+    読み込み前です。「最新を読み込む」を押してください。
+  </div>
 
+  <!-- 座席表示 -->
   <div id="seatResult"></div>
 
+  <!-- 回答一覧 -->
   <h2>回答一覧</h2>
   <div class="table-wrap">
     <table id="answerTable">
@@ -89,20 +196,24 @@
     const safe = (v) => (v ?? "").toString();
 
     async function loadAll() {
+      // 座席割り当て
       const aRes = await fetch("/api/assignments", { cache: "no-store" });
       if (!aRes.ok) { alert("取得失敗: /api/assignments"); return; }
       const aJson = await aRes.json();
       const blocks = Array.isArray(aJson.blocks) ? aJson.blocks : [];
 
+      // 回答一覧（rows配列）
       const rRes = await fetch("/api/responses", { cache: "no-store" });
       if (!rRes.ok) { alert("取得失敗: /api/responses"); return; }
-      const responses = await rRes.json();
+      const rJson = await rRes.json();
+      const responses = Array.isArray(rJson.rows) ? rJson.rows : [];
 
+      // メタ情報
       const meta = document.getElementById("metaBox");
-      meta.innerHTML = `回答数：<strong>${safe(aJson.count ?? (Array.isArray(responses) ? responses.length : 0))}</strong> 名`;
+      meta.innerHTML = `回答数：<strong>${safe(rJson.count ?? aJson.count ?? responses.length)}</strong> 名`;
 
       renderSeats(blocks);
-      renderAnswers(Array.isArray(responses) ? responses : []);
+      renderAnswers(responses);
     }
 
     async function resetAll() {
@@ -114,14 +225,39 @@
       document.getElementById("metaBox").innerHTML = "リセットしました。";
     }
 
-    // ===== 4人がけテーブル表示（2席×2列）=====
+    // ===== 座席描画（triad・奇数対応） =====
     function renderSeats(blocks) {
       const container = document.getElementById("seatResult");
       container.innerHTML = "";
 
       let tableNo = 1;
+      let i = 0;
 
-      for (let i = 0; i < blocks.length; i += 2) {
+      while (i < blocks.length) {
+        const b1 = blocks[i];
+
+        // 3人組（triad）
+        if (b1 && b1.type === "triad") {
+          const el = document.createElement("div");
+          el.className = "table";
+          el.innerHTML = `
+            <div class="table-title">テーブル ${tableNo}</div>
+            <div class="row">
+              ${seatHtml(b1, 0)}
+              ${seatHtml(b1, 1)}
+            </div>
+            <div class="row">
+              ${seatHtml(b1, 2)}
+              <div class="seat empty">空席</div>
+            </div>
+          `;
+          container.appendChild(el);
+          tableNo++;
+          i += 1;
+          continue;
+        }
+
+        // 通常ペア（2ブロックで1テーブル）
         const top = blocks[i];
         const bottom = blocks[i + 1];
 
@@ -140,6 +276,7 @@
         `;
         container.appendChild(el);
         tableNo++;
+        i += 2;
       }
     }
 
@@ -149,11 +286,11 @@
       }
       const m = block.members[idx];
       const name = safe(m.name || "（名前なし）");
-      const cls = (block.type === "triad") ? "seat solo" : "seat pair";
+      const cls = block.type === "triad" ? "seat solo" : "seat pair";
       return `<div class="${cls}">${name}</div>`;
     }
 
-    // ===== 回答一覧 =====
+    // ===== 回答一覧描画 =====
     function renderAnswers(responses) {
       const tbody = document.querySelector("#answerTable tbody");
       tbody.innerHTML = "";
@@ -168,7 +305,7 @@
           <td><span class="badge">${yn(r.q3)}</span></td>
           <td><span class="badge">${yn(r.q4)}</span></td>
           <td>${safe(r.q5)}</td>
-          <td>${safe(r.created_at || r.createdAt || "")}</td>
+          <td>${safe(r.created_at)}</td>
         `;
         tbody.appendChild(tr);
       });
