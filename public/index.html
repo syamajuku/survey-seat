@@ -20,10 +20,9 @@
       margin:0; background:var(--bg); color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     }
-    .wrap{
-      max-width:560px; margin:0 auto; padding:18px;
-    }
+    .wrap{ max-width:560px; margin:0 auto; padding:18px; }
     h1{ font-size:22px; margin:6px 0 12px; font-weight:900; }
+
     .card{
       background:var(--card);
       border:1px solid var(--border);
@@ -32,8 +31,10 @@
       box-shadow:0 1px 0 rgba(0,0,0,0.03);
       margin-bottom:12px;
     }
+
     .label{ font-weight:900; margin:8px 0 6px; }
     .hint{ color:var(--muted); font-size:12px; line-height:1.4; }
+
     input[type="text"], textarea{
       width:100%;
       border:1px solid var(--border);
@@ -45,15 +46,11 @@
       background:#fff;
     }
     textarea{ min-height:86px; resize:vertical; }
+
     .qbox{ padding:10px 0 4px; }
-    .qtitle{
-      font-weight:900;
-      margin-bottom:10px;
-      line-height:1.4;
-    }
-    .yn{
-      display:flex; gap:10px;
-    }
+    .qtitle{ font-weight:900; margin-bottom:10px; line-height:1.4; }
+
+    .yn{ display:flex; gap:10px; }
     .btnYN{
       flex:1;
       padding:12px 10px;
@@ -64,9 +61,172 @@
       cursor:pointer;
       font-size:16px;
     }
-    .btnYN.active-yes{
-      border-color:var(--yes);
-      color:var(--yes);
-      background:#ecfdf5;
+    .btnYN.active-yes{ border-color:var(--yes); color:var(--yes); background:#ecfdf5; }
+    .btnYN.active-no{ border-color:var(--no); color:var(--no); background:#f8fafc; }
+
+    .footer{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .btn{
+      width:100%;
+      padding:14px 12px;
+      border-radius:14px;
+      border:none;
+      font-weight:900;
+      cursor:pointer;
+      font-size:16px;
     }
-    .btnYN
+    .btn-primary{ background:var(--primary); color:#fff; }
+    .btn-primary:disabled{ opacity:.5; cursor:not-allowed; }
+
+    .msg{ margin-top:10px; font-weight:900; }
+    .ok{ color:var(--yes); }
+    .ng{ color:var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>アンケート（所要時間：約1分）</h1>
+
+    <div class="card">
+      <div class="label">お名前</div>
+      <input id="name" type="text" placeholder="例：山田 太郎" />
+
+      <div class="label" style="margin-top:12px;">Q5（自慢）</div>
+      <textarea id="q5" placeholder="例：実は〇〇が得意です"></textarea>
+      <div class="hint">※あなたの server.js はQ5必須です（空だと送信できません）</div>
+    </div>
+
+    <div class="card">
+      <div class="label">質問（Yes / No）</div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q1Text">Q1の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q1Yes" onclick="setYN('q1', true)">Yes</button>
+          <button class="btnYN" id="q1No"  onclick="setYN('q1', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q2Text">Q2の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q2Yes" onclick="setYN('q2', true)">Yes</button>
+          <button class="btnYN" id="q2No"  onclick="setYN('q2', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q3Text">Q3の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q3Yes" onclick="setYN('q3', true)">Yes</button>
+          <button class="btnYN" id="q3No"  onclick="setYN('q3', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q4Text">Q4の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q4Yes" onclick="setYN('q4', true)">Yes</button>
+          <button class="btnYN" id="q4No"  onclick="setYN('q4', false)">No</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="hint">
+      ※運営ページでQ1〜Q4の文言を変更すると、こちらも反映されます（再読み込みで更新）。
+    </div>
+  </div>
+
+  <script>
+    const state = { q1:null, q2:null, q3:null, q4:null };
+
+    function setYN(key, val){
+      state[key] = val;
+      const yesBtn = document.getElementById(key + "Yes");
+      const noBtn  = document.getElementById(key + "No");
+
+      yesBtn.classList.remove("active-yes");
+      noBtn.classList.remove("active-no");
+
+      if(val === true) yesBtn.classList.add("active-yes");
+      if(val === false) noBtn.classList.add("active-no");
+    }
+
+    async function loadQuestions(){
+      try{
+        const res = await fetch("/api/questions", { cache: "no-store" });
+        const json = await res.json();
+        if(!json.ok) return;
+        const q = json.questions || {};
+        const setText = (id, text) => {
+          const el = document.getElementById(id);
+          if(el) el.textContent = text || "";
+        };
+        setText("q1Text", q.q1);
+        setText("q2Text", q.q2);
+        setText("q3Text", q.q3);
+        setText("q4Text", q.q4);
+      }catch(e){}
+    }
+
+    function showMsg(text, ok){
+      const msg = document.getElementById("msg");
+      msg.textContent = text;
+      msg.className = "msg " + (ok ? "ok" : "ng");
+    }
+
+    async function submitForm(){
+      const name = document.getElementById("name").value.trim();
+      const q5 = document.getElementById("q5").value.trim();
+
+      if(!name){ showMsg("お名前を入力してください。", false); return; }
+      for(const k of ["q1","q2","q3","q4"]){
+        if(state[k] === null){
+          showMsg("Q1〜Q4をすべて選択してください。", false);
+          return;
+        }
+      }
+      if(!q5){
+        showMsg("Q5（自慢）を入力してください。", false);
+        return;
+      }
+
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      showMsg("送信中…", true);
+
+      try{
+        const res = await fetch("/api/responses", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ name, q1:state.q1, q2:state.q2, q3:state.q3, q4:state.q4, q5 })
+        });
+        const json = await res.json().catch(()=>({}));
+
+        if(!res.ok || !json.ok){
+          showMsg(json.error || "送信に失敗しました。", false);
+        }else{
+          showMsg("送信しました。ありがとうございました！", true);
+          document.getElementById("q5").value = "";
+          for(const k of ["q1","q2","q3","q4"]){ state[k]=null; }
+          ["q1","q2","q3","q4"].forEach(k=>{
+            document.getElementById(k+"Yes").classList.remove("active-yes");
+            document.getElementById(k+"No").classList.remove("active-no");
+          });
+        }
+      }catch(e){
+        showMsg("送信に失敗しました。", false);
+      }finally{
+        btn.disabled = false;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", loadQuestions);
+  </script>
+</body>
+</html>

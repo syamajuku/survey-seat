@@ -12,6 +12,35 @@ app.use(express.json({ limit: "1mb" }));
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "responses.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
+const QUESTIONS_PATH = path.join(__dirname, "data", "questions.json");
+
+function readQuestions() {
+  try {
+    const raw = fs.readFileSync(QUESTIONS_PATH, "utf-8");
+    const q = JSON.parse(raw);
+    return {
+      q1: q.q1 ?? "Q1の質問文",
+      q2: q.q2 ?? "Q2の質問文",
+      q3: q.q3 ?? "Q3の質問文",
+      q4: q.q4 ?? "Q4の質問文",
+    };
+  } catch (e) {
+    return { q1: "Q1の質問文", q2: "Q2の質問文", q3: "Q3の質問文", q4: "Q4の質問文" };
+  }
+}
+
+function writeQuestions(q) {
+  const next = {
+    q1: String(q.q1 ?? ""),
+    q2: String(q.q2 ?? ""),
+    q3: String(q.q3 ?? ""),
+    q4: String(q.q4 ?? ""),
+  };
+  fs.mkdirSync(path.dirname(QUESTIONS_PATH), { recursive: true });
+  fs.writeFileSync(QUESTIONS_PATH, JSON.stringify(next, null, 2), "utf-8");
+  return next;
+}
+
 
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -209,6 +238,19 @@ function assignSeats(responses) {
 }
 
 // --- API ---
+
+// 質問文 取得
+app.get("/api/questions", (req, res) => {
+  res.json({ ok: true, questions: readQuestions() });
+});
+
+// 質問文 更新（運営用）
+app.post("/api/questions", (req, res) => {
+  const { q1, q2, q3, q4 } = req.body || {};
+  const saved = writeQuestions({ q1, q2, q3, q4 });
+  res.json({ ok: true, questions: saved });
+});
+
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.get("/api/responses", (req, res) => {

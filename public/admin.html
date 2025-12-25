@@ -28,11 +28,8 @@
       background:#fff; border:1px solid #e5e7eb; border-radius:12px;
       padding:14px; margin:10px 0 14px 0;
     }
-    .meta{font-size:14px;}
 
-    .grid{
-      display:grid; gap:10px;
-    }
+    .grid{ display:grid; gap:10px; }
     .qrow label{font-weight:900; display:block; margin-bottom:6px;}
     .qrow input{
       width:100%;
@@ -42,6 +39,7 @@
       font-size:14px;
       box-sizing:border-box;
     }
+    .hint{color:#6b7280; font-size:12px; line-height:1.4;}
 
     /* ===== 座席（4人がけテーブル） ===== */
     #seatResult{display:flex; flex-wrap:wrap; gap:16px;}
@@ -73,7 +71,6 @@
     th{background:#f3f4f6; font-weight:900;}
     td.name{text-align:left; font-weight:900;}
     .badge{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ddd; background:#fff; font-weight:900; font-size:12px;}
-    .hint{color:#6b7280; font-size:12px; line-height:1.4;}
   </style>
 </head>
 
@@ -89,36 +86,22 @@
   <div class="card">
     <div style="font-weight:900; margin-bottom:8px;">質問文の編集（Q1〜Q4）</div>
     <div class="grid">
-      <div class="qrow">
-        <label>Q1</label>
-        <input id="q1Input" placeholder="Q1の質問文" />
-      </div>
-      <div class="qrow">
-        <label>Q2</label>
-        <input id="q2Input" placeholder="Q2の質問文" />
-      </div>
-      <div class="qrow">
-        <label>Q3</label>
-        <input id="q3Input" placeholder="Q3の質問文" />
-      </div>
-      <div class="qrow">
-        <label>Q4</label>
-        <input id="q4Input" placeholder="Q4の質問文" />
-      </div>
+      <div class="qrow"><label>Q1</label><input id="q1Input" placeholder="Q1の質問文" /></div>
+      <div class="qrow"><label>Q2</label><input id="q2Input" placeholder="Q2の質問文" /></div>
+      <div class="qrow"><label>Q3</label><input id="q3Input" placeholder="Q3の質問文" /></div>
+      <div class="qrow"><label>Q4</label><input id="q4Input" placeholder="Q4の質問文" /></div>
 
       <div class="controls" style="margin:6px 0 0 0;">
         <button class="btn-ghost" onclick="loadQuestionsToAdmin()">質問を読み込む</button>
         <button class="btn-primary" id="saveQBtn" onclick="saveQuestionsFromAdmin()">質問を保存</button>
       </div>
 
-      <div class="hint">
-        ※保存後、参加者ページは再読み込みすると新しい質問文が表示されます。
-      </div>
+      <div class="hint">※保存後、参加者ページは再読み込みすると新しい質問文が表示されます。</div>
     </div>
   </div>
 
   <!-- 集計メタ -->
-  <div class="card meta" id="metaBox">読み込み前です。「最新を読み込む」を押してください。</div>
+  <div class="card" id="metaBox">読み込み前です。「最新を読み込む」を押してください。</div>
 
   <!-- 座席 -->
   <div id="seatResult"></div>
@@ -147,7 +130,6 @@
     const yn = (v) => (v === true ? "Yes" : v === false ? "No" : "");
     const safe = (v) => (v ?? "").toString();
 
-    // ---- 質問の読み込み/保存（運営UI） ----
     async function loadQuestionsToAdmin(){
       const res = await fetch("/api/questions", { cache: "no-store" });
       const json = await res.json().catch(()=>({}));
@@ -189,24 +171,19 @@
       }
     }
 
-    // ---- 集計/座席/回答一覧 ----
     async function loadAll() {
-      // 座席割り当て（/api/assignments: { blocks: [...] }）
       const aRes = await fetch("/api/assignments", { cache: "no-store" });
       if (!aRes.ok) { alert("取得失敗: /api/assignments"); return; }
       const aJson = await aRes.json().catch(()=>({}));
       const blocks = Array.isArray(aJson.blocks) ? aJson.blocks : [];
 
-      // 回答一覧（/api/responses: { rows: [...] }）
       const rRes = await fetch("/api/responses", { cache: "no-store" });
       if (!rRes.ok) { alert("取得失敗: /api/responses"); return; }
       const rJson = await rRes.json().catch(()=>({}));
       const responses = Array.isArray(rJson.rows) ? rJson.rows : [];
 
-      // メタ表示
       const meta = document.getElementById("metaBox");
-      const count = (rJson.count ?? aJson.count ?? responses.length ?? 0);
-      meta.innerHTML = `回答数：<strong>${safe(count)}</strong> 名`;
+      meta.innerHTML = `回答数：<strong>${safe(rJson.count ?? aJson.count ?? responses.length ?? 0)}</strong> 名`;
 
       renderSeats(blocks);
       renderAnswers(responses);
@@ -216,13 +193,12 @@
       if (!confirm("本当に全回答を削除しますか？")) return;
       const res = await fetch("/api/reset", { method: "POST" });
       if (!res.ok) { alert("リセット失敗: /api/reset"); return; }
-
       document.getElementById("seatResult").innerHTML = "";
       document.querySelector("#answerTable tbody").innerHTML = "";
       document.getElementById("metaBox").innerHTML = "リセットしました。";
     }
 
-    // triad/奇数対応の座席表示
+    // triad/奇数対応（表示）
     function renderSeats(blocks) {
       const container = document.getElementById("seatResult");
       container.innerHTML = "";
@@ -233,7 +209,7 @@
       while (i < blocks.length) {
         const b1 = blocks[i];
 
-        // triad（3人組）：上段2人、下段左に3人目
+        // triad：上段2人、下段左に3人目
         if (b1 && b1.type === "triad") {
           const el = document.createElement("div");
           el.className = "table";
@@ -254,7 +230,7 @@
           continue;
         }
 
-        // pair：2ブロックで1テーブル（最後が余ったら空席で埋める）
+        // pair：2ブロックで1テーブル（最後が余れば空席）
         const top = blocks[i];
         const bottom = blocks[i + 1];
 
@@ -290,7 +266,6 @@
     function renderAnswers(responses) {
       const tbody = document.querySelector("#answerTable tbody");
       tbody.innerHTML = "";
-
       responses.forEach((r, i) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -307,7 +282,6 @@
       });
     }
 
-    // ページ表示時に質問を読み込む（運営の入力欄に反映）
     window.addEventListener("DOMContentLoaded", loadQuestionsToAdmin);
   </script>
 </body>
