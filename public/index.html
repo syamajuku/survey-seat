@@ -1,281 +1,72 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1, viewport-fit=cover" />
-  <title>B面コミュニケーション アンケート</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>アンケート</title>
   <style>
     :root{
-      --bg:#f6f7f9; --card:#fff; --text:#111; --sub:#666;
-      --line:#e5e7eb; --accent:#111;
-      --radius:16px;
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --primary:#2563eb;
+      --danger:#dc2626;
+      --yes:#16a34a;
+      --no:#64748b;
     }
-    *{ box-sizing:border-box; }
     body{
-      margin:0; font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-      background: var(--bg); color: var(--text);
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     }
     .wrap{
-      max-width: 520px;
-      margin: 0 auto;
-      padding: 16px 14px 110px; /* bottom bar space */
+      max-width:560px; margin:0 auto; padding:18px;
     }
-    .header{
-      padding: 10px 4px 14px;
-    }
-    h1{
-      font-size: 18px; margin: 8px 0 6px;
-      letter-spacing: .02em;
-    }
-    .hint{
-      font-size: 12px; color: var(--sub);
-      line-height: 1.4;
-    }
+    h1{ font-size:22px; margin:6px 0 12px; font-weight:900; }
     .card{
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-top: 12px;
-      box-shadow: 0 1px 0 rgba(0,0,0,.02);
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+      box-shadow:0 1px 0 rgba(0,0,0,0.03);
+      margin-bottom:12px;
     }
-    label.t{
-      display:block;
-      font-weight: 700;
-      font-size: 14px;
-      margin-bottom: 10px;
-      line-height: 1.35;
-    }
-    .field{
-      margin-top: 12px;
-    }
+    .label{ font-weight:900; margin:8px 0 6px; }
+    .hint{ color:var(--muted); font-size:12px; line-height:1.4; }
     input[type="text"], textarea{
       width:100%;
-      font-size: 16px;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      outline: none;
-      background: #fff;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      font-size:16px;
+      box-sizing:border-box;
+      outline:none;
+      background:#fff;
     }
-    textarea{ min-height: 110px; resize: vertical; }
-    .seg{
-      display:flex;
-      gap:10px;
+    textarea{ min-height:86px; resize:vertical; }
+    .qbox{ padding:10px 0 4px; }
+    .qtitle{
+      font-weight:900;
+      margin-bottom:10px;
+      line-height:1.4;
     }
-    /* Hide native radio */
-    .seg input{ position:absolute; opacity:0; pointer-events:none; }
-    .btnOpt{
+    .yn{
+      display:flex; gap:10px;
+    }
+    .btnYN{
       flex:1;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      padding: 14px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: #fff;
-      font-weight: 800;
-      font-size: 16px;
-      min-height: 52px; /* tap target */
-      user-select:none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btnOpt small{ font-weight:700; font-size:12px; color:var(--sub); }
-    .btnOpt.on{
-      border-color: #111;
-      box-shadow: 0 0 0 2px rgba(17,17,17,.08) inset;
-      background: #f3f4f6;
-    }
-    .qmeta{
-      font-size: 12px;
-      color: var(--sub);
-      margin-top: 6px;
-    }
-
-    /* Bottom fixed bar */
-    .bottomBar{
-      position: fixed;
-      left:0; right:0; bottom:0;
-      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-      background: rgba(246,247,249,.92);
-      backdrop-filter: blur(8px);
-      border-top: 1px solid var(--line);
-    }
-    .bottomInner{
-      max-width: 520px;
-      margin: 0 auto;
-      display:flex;
-      gap:10px;
-      align-items:center;
-    }
-    .primary{
-      flex: 1;
-      padding: 14px 14px;
-      border-radius: 16px;
-      background: var(--accent);
-      color:#fff;
-      border: 1px solid var(--accent);
-      font-weight: 900;
-      font-size: 16px;
-      min-height: 54px;
+      padding:12px 10px;
+      border-radius:12px;
+      border:2px solid var(--border);
+      background:#fff;
+      font-weight:900;
       cursor:pointer;
+      font-size:16px;
     }
-    .ghost{
-      padding: 14px 14px;
-      border-radius: 16px;
-      background: #fff;
-      border: 1px solid var(--line);
-      font-weight: 800;
-      min-height: 54px;
-      cursor:pointer;
-      white-space:nowrap;
+    .btnYN.active-yes{
+      border-color:var(--yes);
+      color:var(--yes);
+      background:#ecfdf5;
     }
-    .msg{
-      margin-top: 10px;
-      font-weight: 800;
-      font-size: 14px;
-    }
-    .ok{ color:#0a7; }
-    .ng{ color:#c00; }
-    .mini{
-      font-size: 12px;
-      color: var(--sub);
-      margin-top: 6px;
-      line-height: 1.4;
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="header">
-      <h1>アンケート（所要3〜5分）</h1>
-      <div class="hint">
-        回答は、当日の「隣同士ペアの座席割り当て」にのみ使用します。<br>
-        直感でOK。深く考えなくて大丈夫です。
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="field">
-        <label class="t">ニックネーム（当日呼ばれたい名前）</label>
-        <input id="name" type="text" inputmode="text" autocomplete="name" placeholder="例：しんや / BAL太郎" />
-        <div class="mini">※同じ名前が複数いると集計時に混乱するので、できれば被らない名前でお願いします。</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <label class="t">Q1：自分の失敗談や黒歴史の話をすることはあまり抵抗がない</label>
-      <div class="seg" data-q="q1">
-        <label class="btnOpt"><input type="radio" name="q1" value="Yes">Yes</label>
-        <label class="btnOpt"><input type="radio" name="q1" value="No">No</label>
-      </div>
-      <div class="qmeta">※「話せる／話せない」の感じ方でOK</div>
-    </div>
-
-    <div class="card">
-      <label class="t">Q2：他人の表向きでは話せない裏話を聞いてみたい</label>
-      <div class="seg" data-q="q2">
-        <label class="btnOpt"><input type="radio" name="q2" value="Yes">Yes</label>
-        <label class="btnOpt"><input type="radio" name="q2" value="No">No</label>
-      </div>
-      <div class="qmeta">※「そういう話、結構好き」ならYes</div>
-    </div>
-
-    <div class="card">
-      <label class="t">Q3：自分とは違う価値観の人の話を聞くのは楽しい</label>
-      <div class="seg" data-q="q3">
-        <label class="btnOpt"><input type="radio" name="q3" value="Yes">Yes</label>
-        <label class="btnOpt"><input type="radio" name="q3" value="No">No</label>
-      </div>
-      <div class="qmeta">※座席ペアの方針に使います</div>
-    </div>
-
-    <div class="card">
-      <label class="t">Q4：自分のことを話すより人の話をたくさん聞く方が好きだ</label>
-      <div class="seg" data-q="q4">
-        <label class="btnOpt"><input type="radio" name="q4" value="Yes">Yes</label>
-        <label class="btnOpt"><input type="radio" name="q4" value="No">No</label>
-      </div>
-      <div class="qmeta">※当日の「話す／聞く」のバランス調整に使います</div>
-    </div>
-
-    <div class="card">
-      <label class="t">Q5：私が人に誇れる自慢は○○です。（自由記述）</label>
-      <textarea id="q5" placeholder="例：初対面でも相手の緊張をほどくのが得意です"></textarea>
-      <div class="qmeta">※ここが会話のスタート地点になります（短くてOK）</div>
-
-      <div id="msg" class="msg"></div>
-    </div>
-  </div>
-
-  <div class="bottomBar">
-    <div class="bottomInner">
-      <button class="ghost" type="button" id="adminBtn">運営</button>
-      <button class="primary" type="button" id="submitBtn">送信する</button>
-    </div>
-  </div>
-
-<script>
-  function getRadio(name) {
-    const el = document.querySelector(`input[name="${name}"]:checked`);
-    return el ? el.value : null;
-  }
-  function toBool(v) { return v === "Yes"; }
-
-  // Toggle button styles
-  document.querySelectorAll(".seg").forEach(seg => {
-    seg.addEventListener("click", (e) => {
-      const label = e.target.closest("label");
-      if (!label) return;
-      const input = label.querySelector("input");
-      if (!input) return;
-      input.checked = true;
-
-      seg.querySelectorAll(".btnOpt").forEach(x => x.classList.remove("on"));
-      label.classList.add("on");
-    });
-  });
-
-  async function submit() {
-    const payload = {
-      name: document.getElementById("name").value.trim(),
-      q1: toBool(getRadio("q1")),
-      q2: toBool(getRadio("q2")),
-      q3: toBool(getRadio("q3")),
-      q4: toBool(getRadio("q4")),
-      q5: document.getElementById("q5").value.trim()
-    };
-
-    const msg = document.getElementById("msg");
-    msg.textContent = "送信中...";
-    msg.className = "msg";
-
-    try {
-      const r = await fetch("/api/responses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await r.json();
-      if (!data.ok) {
-        msg.textContent = data.error || "送信に失敗しました。";
-        msg.className = "msg ng";
-        return;
-      }
-      msg.textContent = "送信しました！ありがとうございました。";
-      msg.className = "msg ok";
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-    } catch (e) {
-      msg.textContent = "通信エラーが発生しました。電波状況をご確認ください。";
-      msg.className = "msg ng";
-    }
-  }
-
-  document.getElementById("submitBtn").addEventListener("click", submit);
-  document.getElementById("adminBtn").addEventListener("click", () => {
-    window.open("/admin", "_blank", "noopener,noreferrer");
-  });
-</script>
-</body>
-</html>
+    .btnYN
