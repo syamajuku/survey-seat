@@ -63,46 +63,72 @@ function writeState(next) {
   return merged;
 }
 
-function buildSeatMap(rows) {
+function buildTables(rows) {
   const blocks = assignSeats(rows);
 
-  const map = new Map(); // id -> seat info
+  const tables = []; // [{tableNo, seats:[{pos,name,id,blockType,groupMembers}...]}]
   let tableNo = 1;
   let i = 0;
+
+  const posName = ["左上", "右上", "左下", "右下"];
 
   while (i < blocks.length) {
     const b = blocks[i];
 
     if (b.type === "triad") {
-      // triad = 1テーブル扱い（3名）
-      b.members.forEach((m, idx) => {
-        map.set(m.id, {
-          table: tableNo,
-          position: idx === 0 ? "左上" : idx === 1 ? "右上" : "左下",
-          blockType: "triad",
-          members: b.members.map(x => ({ id: x.id, name: x.name }))
-        });
-      });
+      // triadは1テーブル（3名 + 空席1）
+      const seats = [
+        seatObj(b, 0, "左上"),
+        seatObj(b, 1, "右上"),
+        seatObj(b, 2, "左下"),
+        { pos: "右下", empty: true }
+      ];
+      tables.push({ tableNo, seats });
       tableNo++;
       i += 1;
       continue;
     }
 
-    // pairは2ブロックで1テーブル（上段=blocks[i], 下段=blocks[i+1]）
+    // pairは2ブロックで1テーブル
     const top = blocks[i];
     const bottom = blocks[i + 1];
 
-    if (top?.members?.[0]) map.set(top.members[0].id, { table: tableNo, position: "左上", blockType: "pair", members: top.members.map(x => ({ id:x.id, name:x.name })) });
-    if (top?.members?.[1]) map.set(top.members[1].id, { table: tableNo, position: "右上", blockType: "pair", members: top.members.map(x => ({ id:x.id, name:x.name })) });
+    const seats = [
+      seatObj(top, 0, "左上"),
+      seatObj(top, 1, "右上"),
+      seatObj(bottom, 0, "左下"),
+      seatObj(bottom, 1, "右下"),
+    ];
 
-    if (bottom?.members?.[0]) map.set(bottom.members[0].id, { table: tableNo, position: "左下", blockType: "pair", members: bottom.members.map(x => ({ id:x.id, name:x.name })) });
-    if (bottom?.members?.[1]) map.set(bottom.members[1].id, { table: tableNo, position: "右下", blockType: "pair", members: bottom.members.map(x => ({ id:x.id, name:x.name })) });
-
+    tables.push({ tableNo, seats });
     tableNo++;
     i += 2;
   }
 
-  return map;
+  // 自分のidから、どのテーブルか逆引き
+  const idToTable = new Map();
+  for (const t of tables) {
+    for (const s of t.seats) {
+      if (s && s.id) idToTable.set(s.id, t.tableNo);
+    }
+  }
+
+  return { tables, idToTable };
+
+  function seatObj(block, idx, pos) {
+    if (!block || !Array.isArray(block.members) || !block.members[idx]) {
+      return { pos, empty: true };
+    }
+    const m = block.members[idx];
+    return {
+      pos,
+      id: m.id,
+      name: m.name,
+      blockType: block.type, // pair or triad
+      // 同じペア/トライアドのメンバー（表示用）
+      groupMembers: (block.members || []).map(x => ({ id: x.id, name: x.name }))
+    };
+  }
 }
 
 function ensureDataFile() {
@@ -395,13 +421,23 @@ app.get("/api/myseat", (req, res) => {
   }
 
   const rows = loadResponses();
-  const seatMap = buildSeatMap(rows);
-  const info = seatMap.get(String(id));
+  const { tables, idToTable } = buildTables(rows);
 
-  if (!info) return res.status(404).json({ ok: false, published: true, error: "seat not found" });
+  const tableNo = idToTable.get(String(id));
+  if (!tableNo) return res.status(404).json({ ok: false, published: true, error: "seat not found" });
 
-  res.json({ ok: true, published: true, seat: info });
+  const table = tables.find(t => t.tableNo === tableNo);
+  const mySeat = table.seats.find(s => s.id === String(id));
+
+  res.json({
+    ok: true,
+    published: true,
+    tableNo,
+    mySeat,
+    tableSeats: table.seats
+  });
 });
+
 app.post("/api/reset", (req, res) => {
   saveResponses([]);
   writeState({ published: false }); // ←これを追加

@@ -80,6 +80,25 @@
     .msg{ margin-top:10px; font-weight:900; }
     .ok{ color:var(--yes); }
     .ng{ color:var(--danger); }
+
+/* ===== 4人がけテーブル表示（参加者用） ===== */
+.table{
+  width:280px; background:#fafafa; border:2px solid #333; border-radius:12px;
+  padding:12px; margin:0 auto;
+}
+.table-title{font-weight:900; text-align:center; margin-bottom:10px;}
+.row{display:flex; justify-content:space-between; margin-bottom:10px;}
+.seat{
+  width:48%; min-height:48px;
+  display:flex; align-items:center; justify-content:center;
+  padding:12px 8px; border-radius:10px; box-sizing:border-box;
+  font-weight:900; text-align:center; word-break:break-word;
+}
+.seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
+.seat.solo{background:#fff7ed; border:2px dashed #f97316;}
+.seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
+.seat.me{outline:4px solid #111827;} /* 自分の席を強調 */
+
   </style>
 </head>
 <body>
@@ -136,6 +155,7 @@
     <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
   </div>
 
+
 <div id="seatBox" class="card" style="display:none;">
   <div class="label">あなたの座席</div>
   <div id="seatText" style="font-weight:900; font-size:18px;"></div>
@@ -143,6 +163,13 @@
 </div>
 
   <div id="msg" class="msg"></div>
+
+<div id="seatBox" class="card" style="display:none; margin-top:12px;">
+  <div class="label">あなたの座席（テーブル表示）</div>
+  <div id="seatMeta" class="hint"></div>
+  <div id="seatResult" style="margin-top:10px;"></div>
+</div>
+
 </div>
 
   </div>
@@ -222,7 +249,9 @@
           ["q1","q2","q3","q4"].forEach(k=>{
             document.getElementById(k+"Yes").classList.remove("active-yes");
             document.getElementById(k+"No").classList.remove("active-no");
-	　localStorage.setItem("surveySeat_userId", json.record.id);
+　　　　　　　localStorage.setItem("surveySeat_userId", json.record.id);
+　　　　　　　checkSeat(); // すぐ表示更新
+
 
           });
         }
@@ -237,35 +266,70 @@
 
 async function checkSeat(){
   const id = localStorage.getItem("surveySeat_userId");
-  if(!id) return; // まだ回答していない
+  if(!id) return;
 
-  // 公開状態確認＆自分の席取得
-  const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
-  const json = await res.json().catch(()=>({}));
-
-  if(!json.ok) return;
-
-  if(json.published === false){
-    // 未公開なら待機（表示してもOK）
-    const box = document.getElementById("seatBox");
-    box.style.display = "block";
-    document.getElementById("seatText").textContent = "座席はまだ公開されていません";
-    document.getElementById("seatHint").textContent = "運営が「座席を公開」を押すと表示されます。";
-    return;
-  }
-
-  // 公開された
-  const seat = json.seat;
   const box = document.getElementById("seatBox");
-  box.style.display = "block";
-  document.getElementById("seatText").textContent = `テーブル ${seat.table} ／ ${seat.position}`;
+  const meta = document.getElementById("seatMeta");
+  const out = document.getElementById("seatResult");
 
-  // 同じ段の相手などをヒント表示
-  const names = (seat.members || []).map(x => x.name).filter(Boolean).join("・");
-  document.getElementById("seatHint").textContent = seat.blockType === "triad"
-    ? `同じテーブル：${names}（3人テーブル）`
-    : `同じペア：${names}`;
+  try{
+    const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
+    const json = await res.json().catch(()=>({}));
+
+    if(!json.ok) return;
+
+    box.style.display = "block";
+
+    if(json.published === false){
+      meta.textContent = "座席はまだ公開されていません。運営が「座席を公開」を押すと表示されます。";
+      out.innerHTML = "";
+      return;
+    }
+
+    const tableNo = json.tableNo;
+    const seats = Array.isArray(json.tableSeats) ? json.tableSeats : [];
+    meta.textContent = `テーブル ${tableNo}（あなたの席：${json.mySeat?.pos || ""}）`;
+
+    // 4席を固定順（左上/右上/左下/右下）で表示
+    const order = ["左上","右上","左下","右下"];
+    const seatByPos = new Map(seats.map(s => [s.pos, s]));
+    const seatHtml = (pos) => {
+      const s = seatByPos.get(pos);
+      if(!s || s.empty) return `<div class="seat empty">空席</div>`;
+      const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+      const clsMe = (s.id === id) ? " me" : "";
+      return `<div class="${clsBase}${clsMe}">${escapeHtml(s.name)}</div>`;
+    };
+
+    out.innerHTML = `
+      <div class="table">
+        <div class="table-title">テーブル ${tableNo}</div>
+        <div class="row">
+          ${seatHtml("左上")}
+          ${seatHtml("右上")}
+        </div>
+        <div class="row">
+          ${seatHtml("左下")}
+          ${seatHtml("右下")}
+        </div>
+      </div>
+    `;
+  }catch(e){
+    // 何もしない
+  }
 }
+
+function escapeHtml(str){
+  return (str ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
+setInterval(checkSeat, 5000);
+window.addEventListener("DOMContentLoaded", checkSeat);
 
 // 5秒おきに確認（軽量）
 setInterval(checkSeat, 5000);
