@@ -81,100 +81,106 @@
     .ok{ color:var(--yes); }
     .ng{ color:var(--danger); }
 
-/* ===== 4人がけテーブル表示（参加者用） ===== */
-.table{
-  width:280px; background:#fafafa; border:2px solid #333; border-radius:12px;
-  padding:12px; margin:0 auto;
-}
-.table-title{font-weight:900; text-align:center; margin-bottom:10px;}
-.row{display:flex; justify-content:space-between; margin-bottom:10px;}
-.seat{
-  width:48%; min-height:48px;
-  display:flex; align-items:center; justify-content:center;
-  padding:12px 8px; border-radius:10px; box-sizing:border-box;
-  font-weight:900; text-align:center; word-break:break-word;
-}
-.seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
-.seat.solo{background:#fff7ed; border:2px dashed #f97316;}
-.seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
-.seat.me{outline:4px solid #111827;} /* 自分の席を強調 */
-
+    /* ===== 4人がけテーブル表示（参加者用） ===== */
+    .table{
+      width:280px; background:#fafafa; border:2px solid #333; border-radius:12px;
+      padding:12px; margin:0 auto;
+    }
+    .table-title{font-weight:900; text-align:center; margin-bottom:10px;}
+    .row{display:flex; justify-content:space-between; margin-bottom:10px;}
+    .seat{
+      width:48%; min-height:58px;
+      display:flex; align-items:center; justify-content:center;
+      padding:10px 8px; border-radius:10px; box-sizing:border-box;
+      font-weight:900; text-align:center; word-break:break-word;
+      flex-direction:column;
+    }
+    .seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
+    .seat.solo{background:#fff7ed; border:2px dashed #f97316;}
+    .seat.empty{background:#eee; border:2px dashed #ccc; color:#777; font-weight:800;}
+    .seat.me{outline:4px solid #111827;}
+    .seat .brag{margin-top:4px; font-size:12px; font-weight:800; opacity:.85;}
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <h1>アンケート（所要時間：約1分）</h1>
 
+    <!-- 名前 -->
     <div class="card">
       <div class="label">お名前</div>
       <input id="name" type="text" placeholder="例：山田 太郎" />
+      <div class="hint">※送信後、座席公開までこの画面は開いたままでOKです</div>
     </div>
 
-<div class="card">
-  <div class="label">質問（Yes / No）</div>
+    <!-- Q1〜Q4 -->
+    <div class="card">
+      <div class="label">質問（Yes / No）</div>
 
-  <div class="qbox">
-    <div class="qtitle" id="q1Text">Q1の質問文</div>
-    <div class="yn">
-      <button class="btnYN" id="q1Yes" onclick="setYN('q1', true)">Yes</button>
-      <button class="btnYN" id="q1No"  onclick="setYN('q1', false)">No</button>
+      <div class="qbox">
+        <div class="qtitle" id="q1Text">Q1の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q1Yes" onclick="setYN('q1', true)">Yes</button>
+          <button class="btnYN" id="q1No"  onclick="setYN('q1', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q2Text">Q2の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q2Yes" onclick="setYN('q2', true)">Yes</button>
+          <button class="btnYN" id="q2No"  onclick="setYN('q2', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q3Text">Q3の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q3Yes" onclick="setYN('q3', true)">Yes</button>
+          <button class="btnYN" id="q3No"  onclick="setYN('q3', false)">No</button>
+        </div>
+      </div>
+
+      <div class="qbox">
+        <div class="qtitle" id="q4Text">Q4の質問文</div>
+        <div class="yn">
+          <button class="btnYN" id="q4Yes" onclick="setYN('q4', true)">Yes</button>
+          <button class="btnYN" id="q4No"  onclick="setYN('q4', false)">No</button>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="qbox">
-    <div class="qtitle" id="q2Text">Q2の質問文</div>
-    <div class="yn">
-      <button class="btnYN" id="q2Yes" onclick="setYN('q2', true)">Yes</button>
-      <button class="btnYN" id="q2No"  onclick="setYN('q2', false)">No</button>
+    <!-- Q5 + 送信 -->
+    <div class="card">
+      <div class="label">Q5（自慢）</div>
+      <textarea id="q5" placeholder="例：実は〇〇が得意です（短くでOK）"></textarea>
+      <div class="hint">※必須項目です</div>
+
+      <div class="footer">
+        <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
     </div>
-  </div>
 
-  <div class="qbox">
-    <div class="qtitle" id="q3Text">Q3の質問文</div>
-    <div class="yn">
-      <button class="btnYN" id="q3Yes" onclick="setYN('q3', true)">Yes</button>
-      <button class="btnYN" id="q3No"  onclick="setYN('q3', false)">No</button>
+    <!-- 座席表示（参加者） -->
+    <div id="seatBox" class="card" style="display:none;">
+      <div class="label">あなたの座席（テーブル表示）</div>
+      <div id="seatMeta" class="hint"></div>
+      <div id="seatResult" style="margin-top:10px;"></div>
+      <div class="hint" style="margin-top:10px;">
+        ※自慢は5文字以内で表示されます
+      </div>
     </div>
-  </div>
 
-  <div class="qbox">
-    <div class="qtitle" id="q4Text">Q4の質問文</div>
-    <div class="yn">
-      <button class="btnYN" id="q4Yes" onclick="setYN('q4', true)">Yes</button>
-      <button class="btnYN" id="q4No"  onclick="setYN('q4', false)">No</button>
+    <div class="hint">
+      ※運営ページでQ1〜Q4の文言を変更すると、こちらも反映されます（再読み込みで更新）。
     </div>
-  </div>
-
-  <div class="label">Q5（自慢）</div>
-  <textarea id="q5" placeholder="例：実は〇〇が得意です"></textarea>
-
-</div>
-
-<div class="card">
-  <div class="footer">
-    <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
-  </div>
-
-
-<div id="seatBox" class="card" style="display:none;">
-  <div class="label">あなたの座席</div>
-  <div id="seatText" style="font-weight:900; font-size:18px;"></div>
-  <div class="hint" id="seatHint"></div>
-</div>
-
-  <div id="msg" class="msg"></div>
-
-<div id="seatBox" class="card" style="display:none; margin-top:12px;">
-  <div class="label">あなたの座席（テーブル表示）</div>
-  <div id="seatMeta" class="hint"></div>
-  <div id="seatResult" style="margin-top:10px;"></div>
-</div>
-
-</div>
-
   </div>
 
   <script>
+    // Yes/No回答を保持
     const state = { q1:null, q2:null, q3:null, q4:null };
 
     function setYN(key, val){
@@ -192,7 +198,7 @@
     async function loadQuestions(){
       try{
         const res = await fetch("/api/questions", { cache: "no-store" });
-        const json = await res.json();
+        const json = await res.json().catch(()=>({}));
         if(!json.ok) return;
         const q = json.questions || {};
         const setText = (id, text) => {
@@ -210,6 +216,15 @@
       const msg = document.getElementById("msg");
       msg.textContent = text;
       msg.className = "msg " + (ok ? "ok" : "ng");
+    }
+
+    function escapeHtml(str){
+      return (str ?? "").toString()
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#39;");
     }
 
     async function submitForm(){
@@ -236,24 +251,35 @@
         const res = await fetch("/api/responses", {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ name, q1:state.q1, q2:state.q2, q3:state.q3, q4:state.q4, q5 })
+          body: JSON.stringify({
+            name,
+            q1: state.q1, q2: state.q2, q3: state.q3, q4: state.q4,
+            q5
+          })
         });
+
         const json = await res.json().catch(()=>({}));
 
         if(!res.ok || !json.ok){
           showMsg(json.error || "送信に失敗しました。", false);
         }else{
-          showMsg("送信しました。ありがとうございました！", true);
+          // ★ 自分のIDを保存（座席表示に必須）
+          if(json.record && json.record.id){
+            localStorage.setItem("surveySeat_userId", json.record.id);
+          }
+
+          showMsg("送信しました。座席公開までお待ちください。", true);
+
+          // 入力をリセット（名前は残す運用）
           document.getElementById("q5").value = "";
           for(const k of ["q1","q2","q3","q4"]){ state[k]=null; }
           ["q1","q2","q3","q4"].forEach(k=>{
             document.getElementById(k+"Yes").classList.remove("active-yes");
             document.getElementById(k+"No").classList.remove("active-no");
-　　　　　　　localStorage.setItem("surveySeat_userId", json.record.id);
-　　　　　　　checkSeat(); // すぐ表示更新
-
-
           });
+
+          // すぐ座席チェック（未公開なら待機表示）
+          checkSeat();
         }
       }catch(e){
         showMsg("送信に失敗しました。", false);
@@ -262,89 +288,76 @@
       }
     }
 
-    window.addEventListener("DOMContentLoaded", loadQuestions);
+    async function checkSeat(){
+      const id = localStorage.getItem("surveySeat_userId");
+      if(!id) return;
 
-async function checkSeat(){
-  const id = localStorage.getItem("surveySeat_userId");
-  if(!id) return;
+      const box = document.getElementById("seatBox");
+      const meta = document.getElementById("seatMeta");
+      const out = document.getElementById("seatResult");
+      if(!box || !meta || !out) return; // 念のため
 
-  const box = document.getElementById("seatBox");
-  const meta = document.getElementById("seatMeta");
-  const out = document.getElementById("seatResult");
+      try{
+        const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
+        const json = await res.json().catch(()=>({}));
+        if(!json.ok) return;
 
-  try{
-    const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
-    const json = await res.json().catch(()=>({}));
+        box.style.display = "block";
 
-    if(!json.ok) return;
+        if(json.published === false){
+          meta.textContent = "座席はまだ公開されていません。運営が「座席を公開」を押すと表示されます。";
+          out.innerHTML = "";
+          return;
+        }
 
-    box.style.display = "block";
+        const tableNo = json.tableNo;
+        const seats = Array.isArray(json.tableSeats) ? json.tableSeats : [];
+        meta.textContent = `テーブル ${tableNo}（あなたの席：${json.mySeat?.pos || ""}）`;
 
-    if(json.published === false){
-      meta.textContent = "座席はまだ公開されていません。運営が「座席を公開」を押すと表示されます。";
-      out.innerHTML = "";
-      return;
+        const seatByPos = new Map(seats.map(s => [s.pos, s]));
+        const seatHtml = (pos) => {
+          const s = seatByPos.get(pos);
+          if(!s || s.empty) return `<div class="seat empty">空席</div>`;
+
+          const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+          const clsMe = (s.id === id) ? " me" : "";
+          const name = escapeHtml(s.name);
+          const brag = escapeHtml(s.q5 || "");
+
+          return `
+            <div class="${clsBase}${clsMe}">
+              <div style="font-weight:900; line-height:1.1;">${name}</div>
+              ${brag ? `<div class="brag">${brag}</div>` : ``}
+            </div>
+          `;
+        };
+
+        out.innerHTML = `
+          <div class="table">
+            <div class="table-title">テーブル ${tableNo}</div>
+            <div class="row">
+              ${seatHtml("左上")}
+              ${seatHtml("右上")}
+            </div>
+            <div class="row">
+              ${seatHtml("左下")}
+              ${seatHtml("右下")}
+            </div>
+          </div>
+        `;
+      }catch(e){
+        // 何もしない（通信不安定時など）
+      }
     }
 
-    const tableNo = json.tableNo;
-    const seats = Array.isArray(json.tableSeats) ? json.tableSeats : [];
-    meta.textContent = `テーブル ${tableNo}（あなたの席：${json.mySeat?.pos || ""}）`;
+    // 初期化
+    window.addEventListener("DOMContentLoaded", () => {
+      loadQuestions();
+      checkSeat();
+    });
 
-    // 4席を固定順（左上/右上/左下/右下）で表示
-    const order = ["左上","右上","左下","右下"];
-    const seatByPos = new Map(seats.map(s => [s.pos, s]));
-const seatHtml = (pos) => {
-  const s = seatByPos.get(pos);
-  if(!s || s.empty) return `<div class="seat empty">空席</div>`;
-
-  const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
-  const clsMe = (s.id === id) ? " me" : "";
-
-  const name = escapeHtml(s.name);
-  const brag = escapeHtml(s.q5 || "");
-
-  return `
-    <div class="${clsBase}${clsMe}">
-      <div style="font-weight:900; line-height:1.1;">${name}</div>
-      ${brag ? `<div style="margin-top:4px; font-size:12px; font-weight:800; opacity:.85;">${brag}</div>` : ``}
-    </div>
-  `;
-};
-
-    out.innerHTML = `
-      <div class="table">
-        <div class="table-title">テーブル ${tableNo}</div>
-        <div class="row">
-          ${seatHtml("左上")}
-          ${seatHtml("右上")}
-        </div>
-        <div class="row">
-          ${seatHtml("左下")}
-          ${seatHtml("右下")}
-        </div>
-      </div>
-    `;
-  }catch(e){
-    // 何もしない
-  }
-}
-
-function escapeHtml(str){
-  return (str ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#39;");
-}
-
-setInterval(checkSeat, 5000);
-window.addEventListener("DOMContentLoaded", checkSeat);
-
-// 5秒おきに確認（軽量）
-setInterval(checkSeat, 5000);
-window.addEventListener("DOMContentLoaded", checkSeat);
-
+    // 5秒おきに座席公開を確認
+    setInterval(checkSeat, 5000);
   </script>
 </body>
 </html>

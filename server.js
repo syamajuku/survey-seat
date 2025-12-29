@@ -12,9 +12,39 @@ app.use(express.json({ limit: "1mb" }));
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "responses.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
+
 const QUESTIONS_PATH = path.join(__dirname, "data", "questions.json");
 const STATE_PATH = path.join(__dirname, "data", "state.json");
 
+/* =========================
+   File helpers
+========================= */
+function ensureDir(p) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
+
+function ensureDataFile() {
+  ensureDir(DATA_DIR);
+  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]), "utf-8");
+}
+
+function loadResponses() {
+  ensureDataFile();
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveResponses(rows) {
+  ensureDataFile();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(rows, null, 2), "utf-8");
+}
+
+/* =========================
+   Questions (Q1~Q4)
+========================= */
 function readQuestions() {
   try {
     const raw = fs.readFileSync(QUESTIONS_PATH, "utf-8");
@@ -37,11 +67,14 @@ function writeQuestions(q) {
     q3: String(q.q3 ?? ""),
     q4: String(q.q4 ?? ""),
   };
-  fs.mkdirSync(path.dirname(QUESTIONS_PATH), { recursive: true });
+  ensureDir(path.dirname(QUESTIONS_PATH));
   fs.writeFileSync(QUESTIONS_PATH, JSON.stringify(next, null, 2), "utf-8");
   return next;
 }
 
+/* =========================
+   Publish state
+========================= */
 function readState() {
   try {
     const raw = fs.readFileSync(STATE_PATH, "utf-8");
@@ -54,116 +87,23 @@ function readState() {
 
 function writeState(next) {
   const cur = readState();
+  const published =
+    typeof next.published === "boolean" ? next.published : cur.published;
+
   const merged = {
-    published: typeof next.published === "boolean" ? next.published : cur.published,
-    published_at: next.published === true ? new Date().toISOString() : (next.published === false ? null : cur.published_at)
+    published,
+    published_at: published ? new Date().toISOString() : null,
   };
-  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+
+  ensureDir(path.dirname(STATE_PATH));
   fs.writeFileSync(STATE_PATH, JSON.stringify(merged, null, 2), "utf-8");
   return merged;
 }
 
-function summarizeQ5(text, maxLen = 5) {
-  const s = String(text ?? "").trim();
-  if (!s) return "";
-  // 空白は詰める（見た目安定）
-  const compact = s.replace(/\s+/g, "");
-  if (compact.length <= maxLen) return compact;
-
-  // 超簡易要約：先頭maxLen文字
-  // （「要約」として高度な意味圧縮はせず、短縮表示として安全に実装）
-  return compact.slice(0, maxLen);
-}
-
-function buildTables(rows) {
-  const blocks = assignSeats(rows);
-
-  const tables = []; // [{tableNo, seats:[{pos,name,id,blockType,groupMembers}...]}]
-  let tableNo = 1;
-  let i = 0;
-
-  const posName = ["左上", "右上", "左下", "右下"];
-
-  while (i < blocks.length) {
-    const b = blocks[i];
-
-    if (b.type === "triad") {
-      // triadは1テーブル（3名 + 空席1）
-      const seats = [
-        seatObj(b, 0, "左上"),
-        seatObj(b, 1, "右上"),
-        seatObj(b, 2, "左下"),
-        { pos: "右下", empty: true }
-      ];
-      tables.push({ tableNo, seats });
-      tableNo++;
-      i += 1;
-      continue;
-    }
-
-    // pairは2ブロックで1テーブル
-    const top = blocks[i];
-    const bottom = blocks[i + 1];
-
-    const seats = [
-      seatObj(top, 0, "左上"),
-      seatObj(top, 1, "右上"),
-      seatObj(bottom, 0, "左下"),
-      seatObj(bottom, 1, "右下"),
-    ];
-
-    tables.push({ tableNo, seats });
-    tableNo++;
-    i += 2;
-  }
-
-  // 自分のidから、どのテーブルか逆引き
-  const idToTable = new Map();
-  for (const t of tables) {
-    for (const s of t.seats) {
-      if (s && s.id) idToTable.set(s.id, t.tableNo);
-    }
-  }
-
-  return { tables, idToTable };
-
-function seatObj(block, idx, pos) {
-  if (!block || !Array.isArray(block.members) || !block.members[idx]) {
-    return { pos, empty: true };
-  }
-  const m = block.members[idx];
-  return {
-    pos,
-    id: m.id,
-    name: m.name,
-    q5: summarizeQ5(m.q5, 5),   // ★追加：5文字に短縮
-    blockType: block.type,
-    groupMembers: (block.members || []).map(x => ({
-      id: x.id,
-      name: x.name,
-      q5: summarizeQ5(x.q5, 5)  // ★同席メンバーにも付ける（将来用）
-    }))
-  };
-}
-}
-
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]), "utf-8");
-}
-
-function loadResponses() {
-  ensureDataFile();
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-}
-
-function saveResponses(rows) {
-  ensureDataFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(rows, null, 2), "utf-8");
-}
-
+/* =========================
+   Validation helpers
+========================= */
 function boolize(v) {
-  // Accept true/false, "Yes"/"No", "yes"/"no"
   if (typeof v === "boolean") return v;
   const s = String(v ?? "").toLowerCase().trim();
   if (["yes", "y", "true", "1"].includes(s)) return true;
@@ -186,13 +126,15 @@ function validatePayload(p) {
   return { ok: true, value: { name, q1, q2, q3, q4, q5 } };
 }
 
+/* =========================
+   Seat assignment logic
+========================= */
 /**
- * Seat assignment logic
- * - Pair neighbors: [A][B] [C][D] ...
- * - Q3=No: pair "similar" on Q1/Q2 (min Hamming distance)
- * - Q3=Yes: pair "different" on Q1/Q2 (max Hamming distance, prefer at least 1 diff)
- * - Q4 used only for left/right swap: q4=false => talker => left, q4=true => listener => right (best-effort)
- * - If leftover person exists, attach to best pair (triad) based on compatibility score
+ * Logic:
+ * - Q3=No は「同じ傾向（Q1/Q2が近い）」同士でペアにしやすい
+ * - Q3=Yes は「違い傾向（Q1/Q2が遠い）」同士でペアにしやすい
+ * - ただし全体として必ず2人組に寄せ、余りが出たら1組だけ3人（triad）
+ * - Q4: false(話し手)は左、true(聞き手)は右（できる範囲で入れ替え）
  */
 function hammingQ1Q2(a, b) {
   let d = 0;
@@ -201,86 +143,20 @@ function hammingQ1Q2(a, b) {
   return d; // 0..2
 }
 
-function makePairsSimilar(list) {
-  // Greedy: repeatedly pick a and best match with minimum distance
-  const pool = [...list];
-  const pairs = [];
-  while (pool.length >= 2) {
-    const a = pool.shift();
-    let bestIdx = 0;
-    let bestScore = Infinity;
-    for (let i = 0; i < pool.length; i++) {
-      const b = pool[i];
-      const d = hammingQ1Q2(a, b);
-      if (d < bestScore) {
-        bestScore = d;
-        bestIdx = i;
-      }
-    }
-    const b = pool.splice(bestIdx, 1)[0];
-    pairs.push([a, b]);
-  }
-  return { pairs, leftover: pool[0] ?? null };
-}
-
-function makePairsDifferent(list) {
-  // Greedy: pick a and best match with maximum distance
-  const pool = [...list];
-  const pairs = [];
-  while (pool.length >= 2) {
-    const a = pool.shift();
-    let bestIdx = 0;
-    let bestScore = -1;
-    for (let i = 0; i < pool.length; i++) {
-      const b = pool[i];
-      const d = hammingQ1Q2(a, b);
-      // Prefer d=2 > d=1 > d=0
-      if (d > bestScore) {
-        bestScore = d;
-        bestIdx = i;
-      }
-    }
-    const b = pool.splice(bestIdx, 1)[0];
-    pairs.push([a, b]);
-  }
-  return { pairs, leftover: pool[0] ?? null };
-}
-
 function orderLeftRight(pair) {
   const [a, b] = pair;
   // Q4: true => listener => right; false => talker => left
-  // If both same, keep order.
   if (a.q4 === false && b.q4 === true) return [a, b];
   if (a.q4 === true && b.q4 === false) return [b, a];
   return [a, b];
-}
-
-function pairCompatibility(pair, x) {
-  // Higher is better
-  // For Q3=No people, we value similarity; for Q3=Yes, value difference.
-  // Here: try to keep "conversation depth" compatible using Q1/Q2 closeness and Q4 balance.
-  const [a, b] = pair;
-  const da = hammingQ1Q2(a, x);
-  const db = hammingQ1Q2(b, x);
-  // Prefer attaching where x is not too far from both (avoid friction): (2 - avgDist)
-  const base = 2 - (da + db) / 2; // range ~0..2
-  // Prefer Q4 mix in the triad (not all listeners or all talkers)
-  const q4Vals = [a.q4, b.q4, x.q4];
-  const numListeners = q4Vals.filter(v => v === true).length;
-  const balanceBonus = (numListeners === 1 || numListeners === 2) ? 0.3 : 0;
-  return base + balanceBonus;
 }
 
 function assignSeats(responses) {
   const rows = [...responses];
 
   const noQ3 = rows.filter(r => r.q3 === false);
-  const yesQ3 = rows.filter(r => r.q3 === true);
-
-  const pairs = [];
-
-  // ① Q3=No（安心重視）同士でまずペア
   const used = new Set();
+  const pairs = [];
 
   function takePair(a, b) {
     used.add(a.id);
@@ -288,6 +164,7 @@ function assignSeats(responses) {
     pairs.push(orderLeftRight([a, b]));
   }
 
+  // ① Q3=No 同士は「近い」者同士で先にペア化
   for (let i = 0; i < noQ3.length; i++) {
     const a = noQ3[i];
     if (used.has(a.id)) continue;
@@ -304,17 +181,15 @@ function assignSeats(responses) {
         best = b;
       }
     }
-
     if (best) takePair(a, best);
   }
 
-  // ② 残りをまとめる
+  // ② 残りをまとめる（Q3=Yesや未ペアのNo含む）
   const remaining = rows.filter(r => !used.has(r.id));
 
-  // ③ 残りを2人組で作り切る
+  // ③ 残りは「遠い」者同士で2人組を作り切る
   while (remaining.length >= 2) {
     const a = remaining.shift();
-
     let bestIdx = 0;
     let bestScore = -1;
 
@@ -326,14 +201,13 @@ function assignSeats(responses) {
         bestIdx = i;
       }
     }
-
     const b = remaining.splice(bestIdx, 1)[0];
     pairs.push(orderLeftRight([a, b]));
   }
 
-  // ④ 1人だけ余った場合 → 1組だけ3人に
+  // ④ 1人だけ余った場合 → 1組だけ3人に（先頭のペアに合流）
   if (remaining.length === 1 && pairs.length > 0) {
-    pairs[0].push(remaining[0]); // 先頭の組に合流
+    pairs[0].push(remaining[0]);
   }
 
   return pairs.map(p => ({
@@ -342,7 +216,89 @@ function assignSeats(responses) {
   }));
 }
 
-// --- API ---
+/* =========================
+   Q5 summary (<=5 chars)
+========================= */
+function summarizeQ5(text, maxLen = 5) {
+  const s = String(text ?? "").trim();
+  if (!s) return "";
+  const compact = s.replace(/\s+/g, "");
+  if (compact.length <= maxLen) return compact;
+  return compact.slice(0, maxLen);
+}
+
+/* =========================
+   Build tables for participant view
+   - returns tables (each has 4 positions)
+   - also idToTable map
+========================= */
+function buildTables(rows) {
+  const blocks = assignSeats(rows);
+
+  const tables = []; // [{tableNo, seats:[{pos,id,name,q5,blockType,empty}...]}]
+  let tableNo = 1;
+  let i = 0;
+
+  while (i < blocks.length) {
+    const b = blocks[i];
+
+    if (b.type === "triad") {
+      // triad: 1テーブル（3名+空席1）
+      const seats = [
+        seatObj(b, 0, "左上"),
+        seatObj(b, 1, "右上"),
+        seatObj(b, 2, "左下"),
+        { pos: "右下", empty: true }
+      ];
+      tables.push({ tableNo, seats });
+      tableNo++;
+      i += 1;
+      continue;
+    }
+
+    // pair: 2ブロックで1テーブル
+    const top = blocks[i];
+    const bottom = blocks[i + 1];
+
+    const seats = [
+      seatObj(top, 0, "左上"),
+      seatObj(top, 1, "右上"),
+      seatObj(bottom, 0, "左下"),
+      seatObj(bottom, 1, "右下"),
+    ];
+
+    tables.push({ tableNo, seats });
+    tableNo++;
+    i += 2;
+  }
+
+  const idToTable = new Map();
+  for (const t of tables) {
+    for (const s of t.seats) {
+      if (s && s.id) idToTable.set(s.id, t.tableNo);
+    }
+  }
+
+  return { tables, idToTable };
+
+  function seatObj(block, idx, pos) {
+    if (!block || !Array.isArray(block.members) || !block.members[idx]) {
+      return { pos, empty: true };
+    }
+    const m = block.members[idx];
+    return {
+      pos,
+      id: m.id,
+      name: m.name,
+      q5: summarizeQ5(m.q5, 5), // 参加者表示用（5文字以内）
+      blockType: block.type,
+    };
+  }
+}
+
+/* =========================
+   API
+========================= */
 
 // 質問文 取得
 app.get("/api/questions", (req, res) => {
@@ -356,13 +312,16 @@ app.post("/api/questions", (req, res) => {
   res.json({ ok: true, questions: saved });
 });
 
+// ヘルス
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
+// 回答取得
 app.get("/api/responses", (req, res) => {
   const rows = loadResponses();
   res.json({ ok: true, count: rows.length, rows });
 });
 
+// 回答登録
 app.post("/api/responses", (req, res) => {
   const v = validatePayload(req.body);
   if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
@@ -371,24 +330,25 @@ app.post("/api/responses", (req, res) => {
   const now = new Date().toISOString();
   const record = { id: cryptoRandomId(), created_at: now, ...v.value };
 
-  // name duplicates allowed, but if you want to overwrite by same name, do it here.
   rows.push(record);
   saveResponses(rows);
+
   res.json({ ok: true, record });
 });
 
+// リセット（回答全削除＋座席非公開に戻す）
 app.post("/api/reset", (req, res) => {
-  // Simple reset endpoint (protect with a password if needed)
   saveResponses([]);
+  writeState({ published: false });
   res.json({ ok: true });
 });
 
+// 座席割り当て（運営用：blocks/seatRows を返す）
 app.get("/api/assignments", (req, res) => {
   const rows = loadResponses();
   const blocks = assignSeats(rows);
 
-  // Provide CSV-friendly rows
-  // SeatIndex increments across blocks, within block left-to-right
+  // CSV向け
   const seatRows = [];
   let seatIndex = 1;
   for (const block of blocks) {
@@ -401,7 +361,7 @@ app.get("/api/assignments", (req, res) => {
         q2: m.q2 ? "Yes" : "No",
         q3: m.q3 ? "Yes" : "No",
         q4: m.q4 ? "Yes" : "No",
-        q5: m.q5
+        q5: m.q5,
       });
     }
   }
@@ -426,7 +386,7 @@ app.post("/api/unpublish", (req, res) => {
   res.json({ ok: true, ...s });
 });
 
-// 自分の座席（参加者）
+// 参加者：自分の席（公開後のみ）
 app.get("/api/myseat", (req, res) => {
   const { id } = req.query;
   if (!id) return res.status(400).json({ ok: false, error: "id is required" });
@@ -443,38 +403,40 @@ app.get("/api/myseat", (req, res) => {
   if (!tableNo) return res.status(404).json({ ok: false, published: true, error: "seat not found" });
 
   const table = tables.find(t => t.tableNo === tableNo);
-  const mySeat = table.seats.find(s => s.id === String(id));
+  const mySeat = table?.seats?.find(s => s.id === String(id)) || null;
 
   res.json({
     ok: true,
     published: true,
     tableNo,
     mySeat,
-    tableSeats: table.seats
+    tableSeats: table?.seats || [],
   });
 });
 
-app.post("/api/reset", (req, res) => {
-  saveResponses([]);
-  writeState({ published: false }); // ←これを追加
-  res.json({ ok: true });
-});
-
-// --- static pages ---
+/* =========================
+   Static pages
+========================= */
 app.use(express.static(PUBLIC_DIR));
 
 app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "admin.html")));
 
+/* =========================
+   Start server
+========================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   ensureDataFile();
+  // stateファイルが無くてもOK（readStateがデフォルト返す）
   console.log(`Survey running at http://localhost:${PORT}`);
   console.log(`Admin at http://localhost:${PORT}/admin`);
 });
 
-// --- helpers ---
+/* =========================
+   helpers
+========================= */
 function cryptoRandomId() {
-  // Simple random id without extra deps
+  // 依存なしの簡易ID（十分）
   return Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
 }
