@@ -89,57 +89,56 @@
     <div class="card">
       <div class="label">お名前</div>
       <input id="name" type="text" placeholder="例：山田 太郎" />
-
-      <div class="label" style="margin-top:12px;">Q5（自慢）</div>
-      <textarea id="q5" placeholder="例：実は〇〇が得意です"></textarea>
-      <div class="hint">※あなたの server.js はQ5必須です（空だと送信できません）</div>
     </div>
 
-    <div class="card">
-      <div class="label">質問（Yes / No）</div>
+<div class="card">
+  <div class="label">質問（Yes / No）</div>
 
-      <div class="qbox">
-        <div class="qtitle" id="q1Text">Q1の質問文</div>
-        <div class="yn">
-          <button class="btnYN" id="q1Yes" onclick="setYN('q1', true)">Yes</button>
-          <button class="btnYN" id="q1No"  onclick="setYN('q1', false)">No</button>
-        </div>
-      </div>
-
-      <div class="qbox">
-        <div class="qtitle" id="q2Text">Q2の質問文</div>
-        <div class="yn">
-          <button class="btnYN" id="q2Yes" onclick="setYN('q2', true)">Yes</button>
-          <button class="btnYN" id="q2No"  onclick="setYN('q2', false)">No</button>
-        </div>
-      </div>
-
-      <div class="qbox">
-        <div class="qtitle" id="q3Text">Q3の質問文</div>
-        <div class="yn">
-          <button class="btnYN" id="q3Yes" onclick="setYN('q3', true)">Yes</button>
-          <button class="btnYN" id="q3No"  onclick="setYN('q3', false)">No</button>
-        </div>
-      </div>
-
-      <div class="qbox">
-        <div class="qtitle" id="q4Text">Q4の質問文</div>
-        <div class="yn">
-          <button class="btnYN" id="q4Yes" onclick="setYN('q4', true)">Yes</button>
-          <button class="btnYN" id="q4No"  onclick="setYN('q4', false)">No</button>
-        </div>
-      </div>
-
-      <div class="footer">
-        <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
-      </div>
-
-      <div id="msg" class="msg"></div>
+  <div class="qbox">
+    <div class="qtitle" id="q1Text">Q1の質問文</div>
+    <div class="yn">
+      <button class="btnYN" id="q1Yes" onclick="setYN('q1', true)">Yes</button>
+      <button class="btnYN" id="q1No"  onclick="setYN('q1', false)">No</button>
     </div>
+  </div>
 
-    <div class="hint">
-      ※運営ページでQ1〜Q4の文言を変更すると、こちらも反映されます（再読み込みで更新）。
+  <div class="qbox">
+    <div class="qtitle" id="q2Text">Q2の質問文</div>
+    <div class="yn">
+      <button class="btnYN" id="q2Yes" onclick="setYN('q2', true)">Yes</button>
+      <button class="btnYN" id="q2No"  onclick="setYN('q2', false)">No</button>
     </div>
+  </div>
+
+  <div class="qbox">
+    <div class="qtitle" id="q3Text">Q3の質問文</div>
+    <div class="yn">
+      <button class="btnYN" id="q3Yes" onclick="setYN('q3', true)">Yes</button>
+      <button class="btnYN" id="q3No"  onclick="setYN('q3', false)">No</button>
+    </div>
+  </div>
+
+  <div class="qbox">
+    <div class="qtitle" id="q4Text">Q4の質問文</div>
+    <div class="yn">
+      <button class="btnYN" id="q4Yes" onclick="setYN('q4', true)">Yes</button>
+      <button class="btnYN" id="q4No"  onclick="setYN('q4', false)">No</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="label">Q5（自慢）</div>
+  <textarea id="q5" placeholder="例：実は〇〇が得意です"></textarea>
+  <div class="hint">※必須項目です</div>
+
+  <div class="footer">
+    <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
+  </div>
+
+  <div id="msg" class="msg"></div>
+</div>
+
   </div>
 
   <script>
