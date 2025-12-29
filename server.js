@@ -13,6 +13,7 @@ const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "responses.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const QUESTIONS_PATH = path.join(__dirname, "data", "questions.json");
+const STATE_PATH = path.join(__dirname, "data", "state.json");
 
 function readQuestions() {
   try {
@@ -41,6 +42,68 @@ function writeQuestions(q) {
   return next;
 }
 
+function readState() {
+  try {
+    const raw = fs.readFileSync(STATE_PATH, "utf-8");
+    const s = JSON.parse(raw);
+    return { published: !!s.published, published_at: s.published_at ?? null };
+  } catch (e) {
+    return { published: false, published_at: null };
+  }
+}
+
+function writeState(next) {
+  const cur = readState();
+  const merged = {
+    published: typeof next.published === "boolean" ? next.published : cur.published,
+    published_at: next.published === true ? new Date().toISOString() : (next.published === false ? null : cur.published_at)
+  };
+  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+  fs.writeFileSync(STATE_PATH, JSON.stringify(merged, null, 2), "utf-8");
+  return merged;
+}
+
+function buildSeatMap(rows) {
+  const blocks = assignSeats(rows);
+
+  const map = new Map(); // id -> seat info
+  let tableNo = 1;
+  let i = 0;
+
+  while (i < blocks.length) {
+    const b = blocks[i];
+
+    if (b.type === "triad") {
+      // triad = 1テーブル扱い（3名）
+      b.members.forEach((m, idx) => {
+        map.set(m.id, {
+          table: tableNo,
+          position: idx === 0 ? "左上" : idx === 1 ? "右上" : "左下",
+          blockType: "triad",
+          members: b.members.map(x => ({ id: x.id, name: x.name }))
+        });
+      });
+      tableNo++;
+      i += 1;
+      continue;
+    }
+
+    // pairは2ブロックで1テーブル（上段=blocks[i], 下段=blocks[i+1]）
+    const top = blocks[i];
+    const bottom = blocks[i + 1];
+
+    if (top?.members?.[0]) map.set(top.members[0].id, { table: tableNo, position: "左上", blockType: "pair", members: top.members.map(x => ({ id:x.id, name:x.name })) });
+    if (top?.members?.[1]) map.set(top.members[1].id, { table: tableNo, position: "右上", blockType: "pair", members: top.members.map(x => ({ id:x.id, name:x.name })) });
+
+    if (bottom?.members?.[0]) map.set(bottom.members[0].id, { table: tableNo, position: "左下", blockType: "pair", members: bottom.members.map(x => ({ id:x.id, name:x.name })) });
+    if (bottom?.members?.[1]) map.set(bottom.members[1].id, { table: tableNo, position: "右下", blockType: "pair", members: bottom.members.map(x => ({ id:x.id, name:x.name })) });
+
+    tableNo++;
+    i += 2;
+  }
+
+  return map;
+}
 
 function ensureDataFile() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -302,6 +365,47 @@ app.get("/api/assignments", (req, res) => {
   }
 
   res.json({ ok: true, count: rows.length, blocks, seatRows });
+});
+
+// 公開状態 取得
+app.get("/api/state", (req, res) => {
+  res.json({ ok: true, ...readState() });
+});
+
+// 座席を公開（運営）
+app.post("/api/publish", (req, res) => {
+  const s = writeState({ published: true });
+  res.json({ ok: true, ...s });
+});
+
+// 公開を解除（必要なら）
+app.post("/api/unpublish", (req, res) => {
+  const s = writeState({ published: false });
+  res.json({ ok: true, ...s });
+});
+
+// 自分の座席（参加者）
+app.get("/api/myseat", (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ ok: false, error: "id is required" });
+
+  const state = readState();
+  if (!state.published) {
+    return res.json({ ok: true, published: false });
+  }
+
+  const rows = loadResponses();
+  const seatMap = buildSeatMap(rows);
+  const info = seatMap.get(String(id));
+
+  if (!info) return res.status(404).json({ ok: false, published: true, error: "seat not found" });
+
+  res.json({ ok: true, published: true, seat: info });
+});
+app.post("/api/reset", (req, res) => {
+  saveResponses([]);
+  writeState({ published: false }); // ←これを追加
+  res.json({ ok: true });
 });
 
 // --- static pages ---

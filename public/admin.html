@@ -80,6 +80,8 @@
   <div class="controls">
     <button class="btn-primary" onclick="loadAll()">最新を読み込む</button>
     <button class="btn-danger" onclick="resetAll()">回答をリセット</button>
+　　<button class="btn-primary" onclick="publishSeats()">座席を公開</button>
+
   </div>
 
   <!-- 質問編集 -->
@@ -129,6 +131,14 @@
   <script>
     const yn = (v) => (v === true ? "Yes" : v === false ? "No" : "");
     const safe = (v) => (v ?? "").toString();
+
+async function publishSeats(){
+  if(!confirm("座席を公開します。参加者側に表示されます。よろしいですか？")) return;
+  const res = await fetch("/api/publish", { method: "POST" });
+  const json = await res.json().catch(()=>({}));
+  if(!res.ok || !json.ok){ alert("公開に失敗しました"); return; }
+  alert("座席を公開しました");
+}
 
     async function loadQuestionsToAdmin(){
       const res = await fetch("/api/questions", { cache: "no-store" });
