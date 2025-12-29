@@ -293,13 +293,23 @@ async function checkSeat(){
     // 4席を固定順（左上/右上/左下/右下）で表示
     const order = ["左上","右上","左下","右下"];
     const seatByPos = new Map(seats.map(s => [s.pos, s]));
-    const seatHtml = (pos) => {
-      const s = seatByPos.get(pos);
-      if(!s || s.empty) return `<div class="seat empty">空席</div>`;
-      const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
-      const clsMe = (s.id === id) ? " me" : "";
-      return `<div class="${clsBase}${clsMe}">${escapeHtml(s.name)}</div>`;
-    };
+const seatHtml = (pos) => {
+  const s = seatByPos.get(pos);
+  if(!s || s.empty) return `<div class="seat empty">空席</div>`;
+
+  const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+  const clsMe = (s.id === id) ? " me" : "";
+
+  const name = escapeHtml(s.name);
+  const brag = escapeHtml(s.q5 || "");
+
+  return `
+    <div class="${clsBase}${clsMe}">
+      <div style="font-weight:900; line-height:1.1;">${name}</div>
+      ${brag ? `<div style="margin-top:4px; font-size:12px; font-weight:800; opacity:.85;">${brag}</div>` : ``}
+    </div>
+  `;
+};
 
     out.innerHTML = `
       <div class="table">

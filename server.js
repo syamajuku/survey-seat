@@ -63,6 +63,18 @@ function writeState(next) {
   return merged;
 }
 
+function summarizeQ5(text, maxLen = 5) {
+  const s = String(text ?? "").trim();
+  if (!s) return "";
+  // 空白は詰める（見た目安定）
+  const compact = s.replace(/\s+/g, "");
+  if (compact.length <= maxLen) return compact;
+
+  // 超簡易要約：先頭maxLen文字
+  // （「要約」として高度な意味圧縮はせず、短縮表示として安全に実装）
+  return compact.slice(0, maxLen);
+}
+
 function buildTables(rows) {
   const blocks = assignSeats(rows);
 
@@ -115,20 +127,24 @@ function buildTables(rows) {
 
   return { tables, idToTable };
 
-  function seatObj(block, idx, pos) {
-    if (!block || !Array.isArray(block.members) || !block.members[idx]) {
-      return { pos, empty: true };
-    }
-    const m = block.members[idx];
-    return {
-      pos,
-      id: m.id,
-      name: m.name,
-      blockType: block.type, // pair or triad
-      // 同じペア/トライアドのメンバー（表示用）
-      groupMembers: (block.members || []).map(x => ({ id: x.id, name: x.name }))
-    };
+function seatObj(block, idx, pos) {
+  if (!block || !Array.isArray(block.members) || !block.members[idx]) {
+    return { pos, empty: true };
   }
+  const m = block.members[idx];
+  return {
+    pos,
+    id: m.id,
+    name: m.name,
+    q5: summarizeQ5(m.q5, 5),   // ★追加：5文字に短縮
+    blockType: block.type,
+    groupMembers: (block.members || []).map(x => ({
+      id: x.id,
+      name: x.name,
+      q5: summarizeQ5(x.q5, 5)  // ★同席メンバーにも付ける（将来用）
+    }))
+  };
+}
 }
 
 function ensureDataFile() {
