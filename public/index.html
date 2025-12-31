@@ -153,7 +153,7 @@
 
     <!-- Q5 + 送信 -->
     <div class="card">
-      <div class="label">Q5（自慢）</div>
+	<div class="label" id="q5Label"></div>
       <textarea id="q5" placeholder="例：実は〇〇が得意です（短くでOK）"></textarea>
       <div class="hint">※必須項目です</div>
 
@@ -209,6 +209,7 @@
         setText("q2Text", q.q2);
         setText("q3Text", q.q3);
         setText("q4Text", q.q4);
+	document.getElementById("q5Label").textContent = q.q5 || "";
       }catch(e){}
     }
 
