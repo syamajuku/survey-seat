@@ -80,13 +80,13 @@
   <div class="controls">
     <button class="btn-primary" onclick="loadAll()">最新を読み込む</button>
     <button class="btn-danger" onclick="resetAll()">回答をリセット</button>
-　　<button class="btn-primary" onclick="publishSeats()">座席を公開</button>
+    <button class="btn-primary" onclick="publishSeats()">座席を公開</button>
 
   </div>
 
   <!-- 質問編集 -->
   <div class="card">
-    <div style="font-weight:900; margin-bottom:8px;">質問文の編集（Q1〜Q4）</div>
+    <div style="font-weight:900; margin-bottom:8px;">質問文の編集（Q1〜Q5）</div>
     <div class="grid">
       <div class="qrow"><label>Q1</label><input id="q1Input" placeholder="Q1の質問文" /></div>
       <div class="qrow"><label>Q2</label><input id="q2Input" placeholder="Q2の質問文" /></div>
@@ -159,12 +159,13 @@ async function publishSeats(){
       const btn = document.getElementById("saveQBtn");
       btn.disabled = true;
 
-      const payload = {
-        q1: document.getElementById("q1Input").value,
-        q2: document.getElementById("q2Input").value,
-        q3: document.getElementById("q3Input").value,
-        q4: document.getElementById("q4Input").value,
-	q5: document.getElementById("q5Input").value,
+const payload = {
+  q1: document.getElementById("q1Input").value,
+  q2: document.getElementById("q2Input").value,
+  q3: document.getElementById("q3Input").value,
+  q4: document.getElementById("q4Input").value,
+  q5: document.getElementById("q5Input").value,
+};
 
       try{
         const res = await fetch("/api/questions", {
