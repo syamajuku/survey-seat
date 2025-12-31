@@ -122,7 +122,8 @@
           <th>Q2</th>
           <th>Q3</th>
           <th>Q4</th>
-          <th>Q5（自慢）</th>
+<th>Q5（要約・編集可）</th>
+<th>Q5（原文）</th>
           <th>回答時刻</th>
         </tr>
       </thead>
@@ -213,6 +214,27 @@ const payload = {
       document.getElementById("metaBox").innerHTML = "リセットしました。";
     }
 
+async function saveQ5Short(id){
+  const input = document.querySelector(`input.q5short[data-id="${id}"]`);
+  if(!input) return;
+
+  const val = (input.value || "").replace(/\s+/g,"").slice(0,5);
+  if(!val){ alert("5文字以内で入力してください"); return; }
+
+  const res = await fetch(`/api/responses/${encodeURIComponent(id)}/q5_short`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ q5_short: val })
+  });
+  const json = await res.json().catch(()=>({}));
+  if(!res.ok || !json.ok){
+    alert(json.error || "保存に失敗しました");
+    return;
+  }
+  alert("保存しました");
+}
+
+
     // triad/奇数対応（表示）
     function renderSeats(blocks) {
       const container = document.getElementById("seatResult");
@@ -290,7 +312,21 @@ const payload = {
           <td><span class="badge">${yn(r.q2)}</span></td>
           <td><span class="badge">${yn(r.q3)}</span></td>
           <td><span class="badge">${yn(r.q4)}</span></td>
-          <td>${safe(r.q5)}</td>
+<td>
+  <input
+    data-id="${safe(r.id)}"
+    class="q5short"
+    value="${safe(r.q5_short ?? "")}"
+    style="width:140px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;"
+    maxlength="5"
+  />
+  <button
+    class="btn-ghost"
+    style="margin-left:6px; padding:6px 10px;"
+    onclick="saveQ5Short('${safe(r.id)}')"
+  >保存</button>
+</td>
+<td title="${safe(r.q5)}">${safe(r.q5)}</td>
           <td>${safe(r.created_at)}</td>
         `;
         tbody.appendChild(tr);

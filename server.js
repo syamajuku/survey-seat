@@ -306,6 +306,25 @@ app.get("/api/responses", (req, res) => {
   res.json({ ok: true, count: rows.length, rows });
 });
 
+// 運営：要約Q5を手動修正
+app.post("/api/responses/:id/q5_short", (req, res) => {
+  const id = String(req.params.id || "");
+  const q5_short = String(req.body?.q5_short ?? "").replace(/\s+/g, "").slice(0, 5);
+
+  if (!id) return res.status(400).json({ ok: false, error: "id required" });
+  if (!q5_short) return res.status(400).json({ ok: false, error: "q5_short required" });
+
+  const rows = readJSON(RESPONSES_PATH, []);
+  const idx = rows.findIndex(r => String(r.id) === id);
+  if (idx < 0) return res.status(404).json({ ok: false, error: "not found" });
+
+  rows[idx].q5_short = q5_short;
+  writeJSON(RESPONSES_PATH, rows);
+
+  res.json({ ok: true, id, q5_short });
+});
+
+
 // 回答登録（Q5をAIで5文字要約）
 app.post("/api/responses", async (req, res) => {
   const v = validatePayload(req.body);

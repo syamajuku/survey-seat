@@ -265,9 +265,15 @@
           showMsg(json.error || "送信に失敗しました。", false);
         }else{
           // ★ 自分のIDを保存（座席表示に必須）
-          if(json.record && json.record.id){
-            localStorage.setItem("surveySeat_userId", json.record.id);
-          }
+if(json.record && json.record.id){
+  const id = json.record.id;
+  localStorage.setItem("surveySeat_userId", id);
+
+  // ★ URLにも埋め込む（ページを閉じても復帰できる）
+  const url = new URL(location.href);
+  url.searchParams.set("id", id);
+  history.replaceState(null, "", url.toString());
+}
 
           showMsg("送信しました。座席公開までお待ちください。", true);
 
@@ -289,9 +295,15 @@
       }
     }
 
-    async function checkSeat(){
-      const id = localStorage.getItem("surveySeat_userId");
-      if(!id) return;
+async function checkSeat(){
+  // ★ URL ?id= を優先し、なければ localStorage
+  const url = new URL(location.href);
+  const idFromUrl = url.searchParams.get("id");
+  const id = idFromUrl || localStorage.getItem("surveySeat_userId");
+  if(!id) return;
+
+  // ★ URLにidがあれば localStorageにも保存（復帰用）
+  if(idFromUrl) localStorage.setItem("surveySeat_userId", idFromUrl);
 
       const box = document.getElementById("seatBox");
       const meta = document.getElementById("seatMeta");
