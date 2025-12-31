@@ -271,19 +271,33 @@ app.get("/api/questions", (req, res) => {
 // 質問文 更新（運営用）★Q1〜Q5を確実に保存
 app.post("/api/questions", (req, res) => {
   const { q1, q2, q3, q4, q5 } = req.body || {};
-
-  // 空文字で上書き事故を避ける（未入力は既存値を維持）
   const cur = readQuestions();
+
+  // 空文字は上書きしない（trimして空なら維持）
+  const pick = (v, fallback) => {
+    if (v === undefined || v === null) return fallback;
+    const s = String(v);
+    return s.trim() === "" ? fallback : s;
+  };
+
   const next = {
-    q1: String(q1 ?? cur.q1),
-    q2: String(q2 ?? cur.q2),
-    q3: String(q3 ?? cur.q3),
-    q4: String(q4 ?? cur.q4),
-    q5: String(q5 ?? cur.q5),
+    q1: pick(q1, cur.q1),
+    q2: pick(q2, cur.q2),
+    q3: pick(q3, cur.q3),
+    q4: pick(q4, cur.q4),
+    q5: pick(q5, cur.q5),
   };
 
   const saved = writeQuestions(next);
   res.json({ ok: true, questions: saved });
+});
+
+app.get("/api/version", (req, res) => {
+  res.json({
+    ok: true,
+    commit: process.env.RENDER_GIT_COMMIT || null,
+    node: process.version,
+  });
 });
 
 // 回答取得
