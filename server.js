@@ -48,20 +48,40 @@ function writeJSON(p, obj) {
    Questions (Q1~Q5)
 ========================= */
 function readQuestions() {
+  // デフォルト（未設定でも画面が空にならない）
+  const defaults = {
+    q1: "Q1の質問文",
+    q2: "Q2の質問文",
+    q3: "Q3の質問文",
+    q4: "Q4の質問文",
+    q5: "Q5（自慢できること）を教えてください",
+  };
+
   try {
     const raw = fs.readFileSync(QUESTIONS_PATH, "utf-8");
     const q = JSON.parse(raw);
-    return {
-      q1: q.q1 ?? "",
-      q2: q.q2 ?? "",
-      q3: q.q3 ?? "",
-      q4: q.q4 ?? "",
-      q5: q.q5 ?? "",   // ← ★追加
+
+    const merged = {
+      q1: q.q1 ?? defaults.q1,
+      q2: q.q2 ?? defaults.q2,
+      q3: q.q3 ?? defaults.q3,
+      q4: q.q4 ?? defaults.q4,
+      q5: q.q5 ?? defaults.q5,
     };
-  } catch {
-    return { q1: "", q2: "", q3: "", q4: "", q5: "" };
+
+    // ★q5が無かった場合は自動補完して保存（次回以降も安定）
+    if (q.q5 === undefined) {
+      writeQuestions(merged);
+    }
+
+    return merged;
+  } catch (e) {
+    // questions.json が無い/壊れている場合も、デフォルトを保存して返す
+    writeQuestions(defaults);
+    return defaults;
   }
 }
+
 
 function writeQuestions(q) {
   const next = {
@@ -248,17 +268,22 @@ app.get("/api/questions", (req, res) => {
 });
 
 // 質問文更新（Q1〜Q5）
+// 質問文 更新（運営用）★Q1〜Q5を確実に保存
 app.post("/api/questions", (req, res) => {
   const { q1, q2, q3, q4, q5 } = req.body || {};
 
-  const next = { q1, q2, q3, q4, q5 };
-  fs.writeFileSync(
-    QUESTIONS_PATH,
-    JSON.stringify(next, null, 2),
-    "utf-8"
-  );
+  // 空文字で上書き事故を避ける（未入力は既存値を維持）
+  const cur = readQuestions();
+  const next = {
+    q1: String(q1 ?? cur.q1),
+    q2: String(q2 ?? cur.q2),
+    q3: String(q3 ?? cur.q3),
+    q4: String(q4 ?? cur.q4),
+    q5: String(q5 ?? cur.q5),
+  };
 
-  res.json({ ok: true, questions: next });
+  const saved = writeQuestions(next);
+  res.json({ ok: true, questions: saved });
 });
 
 // 回答取得
