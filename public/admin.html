@@ -92,6 +92,8 @@
       <div class="qrow"><label>Q2</label><input id="q2Input" placeholder="Q2の質問文" /></div>
       <div class="qrow"><label>Q3</label><input id="q3Input" placeholder="Q3の質問文" /></div>
       <div class="qrow"><label>Q4</label><input id="q4Input" placeholder="Q4の質問文" /></div>
+      <div class="qrow"><label>Q5</label><input id="q5Input" placeholder="Q5の質問文" /></div>
+
 
       <div class="controls" style="margin:6px 0 0 0;">
         <button class="btn-ghost" onclick="loadQuestionsToAdmin()">質問を読み込む</button>
@@ -149,6 +151,8 @@ async function publishSeats(){
       document.getElementById("q2Input").value = q.q2 || "";
       document.getElementById("q3Input").value = q.q3 || "";
       document.getElementById("q4Input").value = q.q4 || "";
+      document.getElementById("q5Input").value = q.q5 || "";
+
     }
 
     async function saveQuestionsFromAdmin(){
@@ -159,8 +163,8 @@ async function publishSeats(){
         q1: document.getElementById("q1Input").value,
         q2: document.getElementById("q2Input").value,
         q3: document.getElementById("q3Input").value,
-        q4: document.getElementById("q4Input").value
-      };
+        q4: document.getElementById("q4Input").value,
+	q5: document.getElementById("q5Input").value,
 
       try{
         const res = await fetch("/api/questions", {
