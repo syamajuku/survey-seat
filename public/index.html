@@ -337,7 +337,7 @@ if(!res.ok || !json.ok){
 
         const tableNo = json.tableNo;
         const seats = Array.isArray(json.tableSeats) ? json.tableSeats : [];
-        meta.textContent = `テーブル ${tableNo}（あなたの席：${json.mySeat?.pos || ""}）`;
+        meta.textContent = ``;
 
         const seatByPos = new Map(seats.map(s => [s.pos, s]));
         const seatHtml = (pos) => {
