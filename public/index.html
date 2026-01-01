@@ -299,8 +299,18 @@ async function checkSeat(){
   // ★ URL ?id= を優先し、なければ localStorage
   const url = new URL(location.href);
   const idFromUrl = url.searchParams.get("id");
-  const id = idFromUrl || localStorage.getItem("surveySeat_userId");
-  if(!id) return;
+const id = idFromUrl || localStorage.getItem("surveySeat_userId");
+if(!id){
+  const box = document.getElementById("seatBox");
+  const meta = document.getElementById("seatMeta");
+  const out = document.getElementById("seatResult");
+  if(box && meta && out){
+    box.style.display = "block";
+    meta.textContent = "まだ送信が完了していません。アンケート送信後に座席が表示されます。";
+    out.innerHTML = "";
+  }
+  return;
+}
 
   // ★ URLにidがあれば localStorageにも保存（復帰用）
   if(idFromUrl) localStorage.setItem("surveySeat_userId", idFromUrl);
@@ -311,9 +321,19 @@ async function checkSeat(){
       if(!box || !meta || !out) return; // 念のため
 
       try{
-        const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
-        const json = await res.json().catch(()=>({}));
-        if(!json.ok) return;
+const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
+const json = await res.json().catch(()=>({}));
+
+box.style.display = "block";
+
+// ★ エラーでも理由を表示（これがないと「何も出ない」になる）
+if(!res.ok || !json.ok){
+  meta.textContent = `座席取得に失敗しました（HTTP ${res.status}）。運営に連絡してください。`;
+  out.innerHTML = `<div class="hint" style="color:#dc2626; font-weight:900;">
+    id=${escapeHtml(id)} / response=${escapeHtml(JSON.stringify(json))}
+  </div>`;
+  return;
+}
 
         box.style.display = "block";
 
