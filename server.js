@@ -1,122 +1,101 @@
+// server.js (PostgreSQL 対応 完成版)
+// - Render Postgres の DATABASE_URL を使用（process.env.DATABASE_URL）
+// - questions / responses / publish state を全てDB永続化
+// - 既存UI想定：/api/questions, /api/responses, /api/assignments, /api/publish, /api/myseat, /api/reset
+// - Q5要約：OPENAI_API_KEY があればAI要約、無ければフォールバック
+// - 運営で要約Q5を編集：POST /api/q5short
+
 import express from "express";
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import pkg from "pg";
 import OpenAI from "openai";
+
+const { Pool } = pkg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 /* =========================
-   Paths
+   DB
 ========================= */
-const DATA_DIR = path.join(__dirname, "data");
-const RESPONSES_PATH = path.join(DATA_DIR, "responses.json");
-const QUESTIONS_PATH = path.join(DATA_DIR, "questions.json");
-const STATE_PATH = path.join(DATA_DIR, "state.json");
-const PUBLIC_DIR = path.join(__dirname, "public");
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+});
 
-/* =========================
-   OpenAI
-========================= */
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+async function initDb() {
+  // 初回起動でも自動でテーブルが揃う（手動SQL不要）
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS responses (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      q1 BOOLEAN NOT NULL,
+      q2 BOOLEAN NOT NULL,
+      q3 BOOLEAN NOT NULL,
+      q4 BOOLEAN NOT NULL,
+      q5 TEXT NOT NULL,
+      q5_short TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
-/* =========================
-   File helpers
-========================= */
-function ensureDir(p) {
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-}
-function readJSON(p, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf-8"));
-  } catch {
-    return fallback;
-  }
-}
-function writeJSON(p, obj) {
-  ensureDir(path.dirname(p));
-  fs.writeFileSync(p, JSON.stringify(obj, null, 2), "utf-8");
-}
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS questions (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
 
-/* =========================
-   Questions (Q1~Q5)
-========================= */
-function readQuestions() {
-  // デフォルト（未設定でも画面が空にならない）
-  const defaults = {
-    q1: "Q1の質問文",
-    q2: "Q2の質問文",
-    q3: "Q3の質問文",
-    q4: "Q4の質問文",
-    q5: "Q5（自慢できること）を教えてください",
-  };
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
 
-  try {
-    const raw = fs.readFileSync(QUESTIONS_PATH, "utf-8");
-    const q = JSON.parse(raw);
+  // published が未設定なら false で作る
+  await pool.query(`
+    INSERT INTO state(key, value)
+    VALUES ('published', 'false')
+    ON CONFLICT (key) DO NOTHING
+  `);
 
-    const merged = {
-      q1: q.q1 ?? defaults.q1,
-      q2: q.q2 ?? defaults.q2,
-      q3: q.q3 ?? defaults.q3,
-      q4: q.q4 ?? defaults.q4,
-      q5: q.q5 ?? defaults.q5,
-    };
-
-    // ★q5が無かった場合は自動補完して保存（次回以降も安定）
-    if (q.q5 === undefined) {
-      writeQuestions(merged);
-    }
-
-    return merged;
-  } catch (e) {
-    // questions.json が無い/壊れている場合も、デフォルトを保存して返す
-    writeQuestions(defaults);
-    return defaults;
+  // questions が空ならデフォルト投入
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM questions`);
+  if ((rows?.[0]?.n ?? 0) === 0) {
+    const defaults = defaultQuestions();
+    await writeQuestions(defaults);
   }
 }
 
-
-function writeQuestions(q) {
-  const next = {
-    q1: String(q.q1 ?? ""),
-    q2: String(q.q2 ?? ""),
-    q3: String(q.q3 ?? ""),
-    q4: String(q.q4 ?? ""),
-    q5: String(q.q5 ?? ""),
-  };
-  writeJSON(QUESTIONS_PATH, next);
-  return next;
-}
-
-/* =========================
-   Publish state
-========================= */
-function readState() {
-  const s = readJSON(STATE_PATH, {});
+function defaultQuestions() {
   return {
-    published: !!s.published,
-    published_at: s.published_at ?? null,
+    q1: "自分から話題を出して会話をリードすることが好き",
+    q2: "会話では、過去の話よりも未来の夢の話をする方が好き",
+    q3: "今日は、価値観や考え方が違う人と話してみたい",
+    q4: "会話では、聞き役になることが多い",
+    q5: "自慢できること（短く）を書いてください",
   };
-}
-function writeState(published) {
-  const next = {
-    published: !!published,
-    published_at: published ? new Date().toISOString() : null,
-  };
-  writeJSON(STATE_PATH, next);
-  return next;
 }
 
 /* =========================
-   Validation helpers
+   Helpers
 ========================= */
+function cryptoRandomId() {
+  return (
+    Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)
+  );
+}
+
 function boolize(v) {
   if (typeof v === "boolean") return v;
   const s = String(v ?? "").toLowerCase().trim();
@@ -124,6 +103,7 @@ function boolize(v) {
   if (["no", "n", "false", "0"].includes(s)) return false;
   return null;
 }
+
 function validatePayload(p) {
   const name = String(p.name ?? "").trim();
   const q1 = boolize(p.q1);
@@ -132,31 +112,145 @@ function validatePayload(p) {
   const q4 = boolize(p.q4);
   const q5 = String(p.q5 ?? "").trim();
 
-  if (!name) return { ok: false, error: "名前を入力してください。" };
-  if ([q1, q2, q3, q4].some(v => v === null))
+  if (!name) return { ok: false, error: "名前（ニックネーム）を入力してください。" };
+  if ([q1, q2, q3, q4].some((v) => v === null))
     return { ok: false, error: "Q1〜Q4はYes/Noで回答してください。" };
-  if (!q5) return { ok: false, error: "Q5を入力してください。" };
+  if (!q5) return { ok: false, error: "Q5（自慢）を入力してください。" };
 
   return { ok: true, value: { name, q1, q2, q3, q4, q5 } };
 }
 
-/* =========================
-   Q5 summary (AI + fallback)
-========================= */
 function summarizeFallback(text, maxLen = 5) {
   const s = String(text ?? "").replace(/\s+/g, "");
   return s.length <= maxLen ? s : s.slice(0, maxLen);
 }
-async function summarizeAI(text, maxLen = 5) {
-  if (!openai) throw new Error("OPENAI_API_KEY not set");
-  const input = `次の文章を日本語で${maxLen}文字以内に要約。出力は要約文字列のみ。\n文章:${text}`;
-  const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    input,
-    max_output_tokens: 40,
-  });
-  const out = String(r.output_text ?? "").replace(/\s+/g, "");
-  return out.length <= maxLen ? out : out.slice(0, maxLen);
+
+async function summarizeByAI(text, maxLen = 5) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return summarizeFallback(text, maxLen);
+
+  const openai = new OpenAI({ apiKey });
+
+  // ※ 長文でも maxLen 以内へ。失敗時はフォールバック。
+  try {
+    const input = `次の文章を日本語で${maxLen}文字以内に要約。出力は要約文字列のみ。\n文章:${text}`;
+    const r = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input,
+      max_output_tokens: 40,
+    });
+    const out = String(r.output_text ?? "").replace(/\s+/g, "");
+    return out.length <= maxLen ? out : out.slice(0, maxLen);
+  } catch {
+    return summarizeFallback(text, maxLen);
+  }
+}
+
+/* =========================
+   DB accessors
+========================= */
+async function readQuestions() {
+  const { rows } = await pool.query(`SELECT key, value FROM questions`);
+  const map = {};
+  for (const r of rows) map[r.key] = r.value;
+
+  const d = defaultQuestions();
+  return {
+    q1: map.q1 ?? d.q1,
+    q2: map.q2 ?? d.q2,
+    q3: map.q3 ?? d.q3,
+    q4: map.q4 ?? d.q4,
+    q5: map.q5 ?? d.q5,
+  };
+}
+
+async function writeQuestions(q) {
+  const next = {
+    q1: String(q.q1 ?? ""),
+    q2: String(q.q2 ?? ""),
+    q3: String(q.q3 ?? ""),
+    q4: String(q.q4 ?? ""),
+    q5: String(q.q5 ?? ""),
+  };
+
+  // 空文字防止（未入力ならデフォルトに戻す）
+  const d = defaultQuestions();
+  for (const k of ["q1", "q2", "q3", "q4", "q5"]) {
+    if (!next[k] || !next[k].trim()) next[k] = d[k];
+  }
+
+  for (const [key, value] of Object.entries(next)) {
+    await pool.query(
+      `
+      INSERT INTO questions(key, value)
+      VALUES ($1, $2)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+      `,
+      [key, value]
+    );
+  }
+  return next;
+}
+
+async function readState() {
+  const { rows } = await pool.query(
+    `SELECT value FROM state WHERE key='published' LIMIT 1`
+  );
+  const published = rows?.[0]?.value === "true";
+  return { published };
+}
+
+async function setPublished(published) {
+  await pool.query(
+    `
+    INSERT INTO state(key, value)
+    VALUES ('published', $1)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `,
+    [published ? "true" : "false"]
+  );
+  return { published };
+}
+
+async function loadResponses() {
+  const { rows } = await pool.query(
+    `SELECT id, name, q1, q2, q3, q4, q5, q5_short, created_at
+     FROM responses
+     ORDER BY created_at ASC`
+  );
+  return rows;
+}
+
+async function insertResponse(record) {
+  await pool.query(
+    `
+    INSERT INTO responses(id, name, q1, q2, q3, q4, q5, q5_short, created_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `,
+    [
+      record.id,
+      record.name,
+      record.q1,
+      record.q2,
+      record.q3,
+      record.q4,
+      record.q5,
+      record.q5_short,
+      record.created_at,
+    ]
+  );
+}
+
+async function resetResponses() {
+  await pool.query(`TRUNCATE TABLE responses`);
+}
+
+async function updateQ5Short(id, q5_short) {
+  const short = String(q5_short ?? "").trim();
+  await pool.query(
+    `UPDATE responses SET q5_short = $1 WHERE id = $2`,
+    [short, String(id)]
+  );
 }
 
 /* =========================
@@ -166,220 +260,300 @@ function hammingQ1Q2(a, b) {
   let d = 0;
   if (a.q1 !== b.q1) d++;
   if (a.q2 !== b.q2) d++;
-  return d;
+  return d; // 0..2
 }
+
 function orderLeftRight([a, b]) {
+  // Q4: true => listener => right; false => talker => left
   if (a.q4 === false && b.q4 === true) return [a, b];
   if (a.q4 === true && b.q4 === false) return [b, a];
   return [a, b];
 }
+
+// 2人組を基本。1人余りが出る場合のみ1組だけ3人(triad)
 function assignSeats(rows) {
   const used = new Set();
   const pairs = [];
-  const noQ3 = rows.filter(r => r.q3 === false);
 
+  const noQ3 = rows.filter((r) => r.q3 === false);
+
+  // ① Q3=No 同士は「似ている」優先（最小距離）
   for (let i = 0; i < noQ3.length; i++) {
     const a = noQ3[i];
     if (used.has(a.id)) continue;
-    let best = null, bestScore = Infinity;
+
+    let best = null;
+    let bestScore = Infinity;
     for (let j = i + 1; j < noQ3.length; j++) {
       const b = noQ3[j];
       if (used.has(b.id)) continue;
       const d = hammingQ1Q2(a, b);
-      if (d < bestScore) { bestScore = d; best = b; }
+      if (d < bestScore) {
+        bestScore = d;
+        best = b;
+      }
     }
+
     if (best) {
-      used.add(a.id); used.add(best.id);
+      used.add(a.id);
+      used.add(best.id);
       pairs.push(orderLeftRight([a, best]));
     }
   }
 
-  const remaining = rows.filter(r => !used.has(r.id));
+  // ② 残り（主に Q3=Yes 含む）を「違い」優先（最大距離）
+  const remaining = rows.filter((r) => !used.has(r.id));
   while (remaining.length >= 2) {
     const a = remaining.shift();
-    let bestIdx = 0, bestScore = -1;
+    let bestIdx = 0;
+    let bestScore = -1;
+
     for (let i = 0; i < remaining.length; i++) {
       const d = hammingQ1Q2(a, remaining[i]);
-      if (d > bestScore) { bestScore = d; bestIdx = i; }
+      if (d > bestScore) {
+        bestScore = d;
+        bestIdx = i;
+      }
     }
+
     const b = remaining.splice(bestIdx, 1)[0];
     pairs.push(orderLeftRight([a, b]));
   }
+
+  // ③ 1人余り → 1組だけ3人
   if (remaining.length === 1 && pairs.length > 0) {
     pairs[0].push(remaining[0]);
   }
-  return pairs.map(p => ({ type: p.length === 3 ? "triad" : "pair", members: p }));
+
+  return pairs.map((p) => ({
+    type: p.length === 3 ? "triad" : "pair",
+    members: p,
+  }));
 }
 
-/* =========================
-   Build tables (4 seats)
-========================= */
+// 4人がけテーブル化：ペア2組で1テーブル、triadは1テーブルに3席＋空席
 function buildTables(rows) {
   const blocks = assignSeats(rows);
+
+  function seat(block, idx, pos) {
+    const m = block.members[idx];
+    if (!m) return { pos, empty: true };
+    return {
+      pos,
+      id: m.id,
+      name: m.name,
+      q5: m.q5_short ?? summarizeFallback(m.q5, 5),
+      blockType: block.type,
+    };
+  }
+
   const tables = [];
   let tableNo = 1;
   let i = 0;
 
   while (i < blocks.length) {
     const b = blocks[i];
+
     if (b.type === "triad") {
       tables.push({
         tableNo,
-        seats: [
-          seat(b, 0, "左上"), seat(b, 1, "右上"),
-          seat(b, 2, "左下"), { pos: "右下", empty: true }
-        ]
+        seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), seat(b, 2, "左下"), { pos: "右下", empty: true }],
       });
-      tableNo++; i += 1; continue;
+      tableNo++;
+      i++;
+      continue;
     }
-    const top = blocks[i];
-    const bottom = blocks[i + 1];
+
+    // pair
+    const next = blocks[i + 1];
+    if (next && next.type === "pair") {
+      tables.push({
+        tableNo,
+        seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), seat(next, 0, "左下"), seat(next, 1, "右下")],
+      });
+      tableNo++;
+      i += 2;
+      continue;
+    }
+
+    // pairのみ残った場合（片側空席）
     tables.push({
       tableNo,
-      seats: [
-        seat(top, 0, "左上"), seat(top, 1, "右上"),
-        seat(bottom, 0, "左下"), seat(bottom, 1, "右下"),
-      ]
+      seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), { pos: "左下", empty: true }, { pos: "右下", empty: true }],
     });
-    tableNo++; i += 2;
+    tableNo++;
+    i++;
   }
 
   const idToTable = new Map();
-  tables.forEach(t => t.seats.forEach(s => s.id && idToTable.set(s.id, t.tableNo)));
-  return { tables, idToTable };
-
-  function seat(block, idx, pos) {
-    const m = block.members[idx];
-    if (!m) return { pos, empty: true };
-    return {
-      pos, id: m.id, name: m.name,
-      q5: m.q5_short ?? summarizeFallback(m.q5, 5),
-      blockType: block.type
-    };
+  for (const t of tables) {
+    for (const s of t.seats) {
+      if (s && !s.empty && s.id) idToTable.set(String(s.id), t.tableNo);
+    }
   }
+  return { tables, idToTable, blocks };
 }
 
 /* =========================
    API
 ========================= */
-// 質問文取得
-app.get("/api/questions", (req, res) => {
-  res.json({ ok: true, questions: readQuestions() });
+
+// 質問文 取得
+app.get("/api/questions", async (req, res) => {
+  const questions = await readQuestions();
+  res.json({ ok: true, questions });
 });
 
-// 質問文更新（Q1〜Q5）
-// 質問文 更新（運営用）★Q1〜Q5を確実に保存
-app.post("/api/questions", (req, res) => {
-  const { q1, q2, q3, q4, q5 } = req.body || {};
-  const cur = readQuestions();
-
-  // 空文字は上書きしない（trimして空なら維持）
-  const pick = (v, fallback) => {
-    if (v === undefined || v === null) return fallback;
-    const s = String(v);
-    return s.trim() === "" ? fallback : s;
-  };
-
-  const next = {
-    q1: pick(q1, cur.q1),
-    q2: pick(q2, cur.q2),
-    q3: pick(q3, cur.q3),
-    q4: pick(q4, cur.q4),
-    q5: pick(q5, cur.q5),
-  };
-
-  const saved = writeQuestions(next);
+// 質問文 更新（運営）
+app.post("/api/questions", async (req, res) => {
+  const saved = await writeQuestions(req.body || {});
   res.json({ ok: true, questions: saved });
 });
 
-app.get("/api/version", (req, res) => {
-  res.json({
-    ok: true,
-    commit: process.env.RENDER_GIT_COMMIT || null,
-    node: process.version,
-  });
-});
-
-// 回答取得
-app.get("/api/responses", (req, res) => {
-  const rows = readJSON(RESPONSES_PATH, []);
+// 回答一覧
+app.get("/api/responses", async (req, res) => {
+  const rows = await loadResponses();
   res.json({ ok: true, count: rows.length, rows });
 });
 
-// 運営：要約Q5を手動修正
-app.post("/api/responses/:id/q5_short", (req, res) => {
-  const id = String(req.params.id || "");
-  const q5_short = String(req.body?.q5_short ?? "").replace(/\s+/g, "").slice(0, 5);
-
-  if (!id) return res.status(400).json({ ok: false, error: "id required" });
-  if (!q5_short) return res.status(400).json({ ok: false, error: "q5_short required" });
-
-  const rows = readJSON(RESPONSES_PATH, []);
-  const idx = rows.findIndex(r => String(r.id) === id);
-  if (idx < 0) return res.status(404).json({ ok: false, error: "not found" });
-
-  rows[idx].q5_short = q5_short;
-  writeJSON(RESPONSES_PATH, rows);
-
-  res.json({ ok: true, id, q5_short });
-});
-
-
-// 回答登録（Q5をAIで5文字要約）
+// 回答登録（参加者）
 app.post("/api/responses", async (req, res) => {
   const v = validatePayload(req.body);
-  if (!v.ok) return res.status(400).json(v);
+  if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
 
-  const rows = readJSON(RESPONSES_PATH, []);
-  let q5_short = "";
-  try { q5_short = await summarizeAI(v.value.q5, 5); }
-  catch { q5_short = summarizeFallback(v.value.q5, 5); }
+  const now = new Date().toISOString();
+  const q5_short = await summarizeByAI(v.value.q5, 5);
 
   const record = {
-    id: Math.random().toString(16).slice(2),
-    created_at: new Date().toISOString(),
+    id: cryptoRandomId(),
+    created_at: now,
+    q5_short,
     ...v.value,
-    q5_short
   };
-  rows.push(record);
-  writeJSON(RESPONSES_PATH, rows);
+
+  await insertResponse(record);
   res.json({ ok: true, record });
 });
 
-// 座席割当（運営）
-app.get("/api/assignments", (req, res) => {
-  const rows = readJSON(RESPONSES_PATH, []);
-  const blocks = assignSeats(rows);
-  res.json({ ok: true, count: rows.length, blocks });
+// 要約Q5を運営が編集
+app.post("/api/q5short", async (req, res) => {
+  const id = String(req.body?.id ?? "");
+  const q5_short = String(req.body?.q5_short ?? "").trim();
+  if (!id) return res.status(400).json({ ok: false, error: "id is required" });
+
+  await updateQ5Short(id, q5_short);
+  res.json({ ok: true });
 });
 
-// 公開状態
-app.get("/api/state", (req, res) => {
-  res.json({ ok: true, ...readState() });
-});
-app.post("/api/publish", (req, res) => {
-  res.json({ ok: true, ...writeState(true) });
-});
-app.post("/api/unpublish", (req, res) => {
-  res.json({ ok: true, ...writeState(false) });
+// 座席割り当て（運営）
+app.get("/api/assignments", async (req, res) => {
+  const rows = await loadResponses();
+  const { blocks, tables } = buildTables(rows);
+
+  // CSV向け（任意）
+  const seatRows = [];
+  let seatIndex = 1;
+  for (const t of tables) {
+    for (const s of t.seats) {
+      if (s.empty) {
+        seatRows.push({
+          seat: seatIndex++,
+          tableNo: t.tableNo,
+          pos: s.pos,
+          empty: true,
+        });
+      } else {
+        const m = rows.find((r) => String(r.id) === String(s.id));
+        seatRows.push({
+          seat: seatIndex++,
+          tableNo: t.tableNo,
+          pos: s.pos,
+          name: s.name,
+          q1: m?.q1 ? "Yes" : "No",
+          q2: m?.q2 ? "Yes" : "No",
+          q3: m?.q3 ? "Yes" : "No",
+          q4: m?.q4 ? "Yes" : "No",
+          q5: m?.q5 ?? "",
+          q5_short: m?.q5_short ?? summarizeFallback(m?.q5 ?? "", 5),
+        });
+      }
+    }
+  }
+
+  res.json({ ok: true, count: rows.length, blocks, tables, seatRows });
 });
 
-// 参加者：自分の席
-app.get("/api/myseat", (req, res) => {
-  const { id } = req.query;
-  if (!id) return res.status(400).json({ ok: false });
+// 座席公開（運営）
+app.post("/api/publish", async (req, res) => {
+  const publish = Boolean(req.body?.publish);
+  const st = await setPublished(publish);
+  res.json({ ok: true, ...st });
+});
 
-  const state = readState();
-  if (!state.published) return res.json({ ok: true, published: false });
+// 自分の席（参加者）
+// published=false の間は published:false を返す
+app.get("/api/myseat", async (req, res) => {
+  const st = await readState();
+  if (!st.published) return res.json({ ok: true, published: false });
 
-  const rows = readJSON(RESPONSES_PATH, []);
+  const id = String(req.query.id ?? "").trim();
+  const name = String(req.query.name ?? "").trim();
+
+  if (!id && !name) {
+    return res.status(400).json({ ok: false, error: "id or name is required" });
+  }
+
+  const rows = await loadResponses();
+
+  // id優先。無ければ name で最新を救済（イベント運用での事故対策）
+  let targetId = id;
+
+  if (!rows.some((r) => String(r.id) === targetId) && name) {
+    const same = rows
+      .filter((r) => String(r.name ?? "").trim() === name)
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+
+    if (same.length > 0) targetId = String(same[0].id);
+  }
+
   const { tables, idToTable } = buildTables(rows);
-  const tableNo = idToTable.get(id);
-  if (!tableNo) return res.status(404).json({ ok: false });
+  const tableNo = idToTable.get(String(targetId));
 
-  const table = tables.find(t => t.tableNo === tableNo);
-  const mySeat = table.seats.find(s => s.id === id);
-  res.json({ ok: true, published: true, tableNo, mySeat, tableSeats: table.seats });
+  if (!tableNo) {
+    // 404にせず found:false（参加者UIで案内しやすい）
+    return res.json({ ok: true, published: true, found: false });
+  }
+
+  const table = tables.find((t) => t.tableNo === tableNo);
+  const mySeat = table.seats.find((s) => !s.empty && String(s.id) === String(targetId));
+
+  res.json({
+    ok: true,
+    published: true,
+    found: true,
+    tableNo,
+    mySeat,
+    tableSeats: table.seats,
+    resolvedId: targetId,
+  });
+});
+
+// 全回答リセット（運営）
+app.post("/api/reset", async (req, res) => {
+  await resetResponses();
+  // 必要なら公開も解除
+  await setPublished(false);
+  res.json({ ok: true });
+});
+
+// ヘルスチェック
+app.get("/api/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true, db: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, db: false });
+  }
 });
 
 /* =========================
@@ -390,6 +564,15 @@ app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "admin.html")));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Survey running at http://localhost:${PORT}`);
-});
+
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Survey running at http://localhost:${PORT}`);
+      console.log(`Admin at http://localhost:${PORT}/admin`);
+    });
+  })
+  .catch((err) => {
+    console.error("DB init failed:", err);
+    process.exit(1);
+  });
