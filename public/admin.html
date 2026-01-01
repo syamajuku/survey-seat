@@ -10,67 +10,66 @@
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
       background:#f5f5f5; margin:0; padding:20px; color:#111;
     }
-
-    h1{margin:0 0 12px 0; font-size:40px; font-weight:900;}
-    h2{margin:28px 0 10px 0; font-size:22px;}
+    h1{margin:0 0 12px 0; font-size:36px; font-weight:900;}
+    h2{margin:26px 0 10px 0; font-size:22px;}
 
     .controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
     button{
       padding:10px 14px; border:none; border-radius:10px;
-      cursor:pointer; font-weight:800; font-size:14px;
+      cursor:pointer; font-weight:800;
     }
     .btn-primary{background:#2563eb; color:#fff;}
     .btn-danger{background:#dc2626; color:#fff;}
-    .btn-ghost{background:#fff; border:1px solid #e5e7eb; color:#111;}
-    .btn-primary:disabled{opacity:.6; cursor:not-allowed;}
 
-    .card{
+    .meta{
       background:#fff; border:1px solid #e5e7eb; border-radius:12px;
-      padding:14px; margin:10px 0 14px 0;
+      padding:12px 14px; margin:10px 0 14px 0; font-size:14px;
     }
 
-    .grid{ display:grid; gap:10px; }
-    .qrow label{font-weight:900; display:block; margin-bottom:6px;}
-    .qrow input{
-      width:100%;
-      padding:10px 12px;
-      border-radius:10px;
-      border:1px solid #e5e7eb;
-      font-size:14px;
-      box-sizing:border-box;
-    }
-    .hint{color:#6b7280; font-size:12px; line-height:1.4;}
+    /* ===== テーブル表示 ===== */
+    #seatResult{display:flex; flex-wrap:wrap; gap:14px;}
 
-    /* ===== 座席（4人がけテーブル） ===== */
-    #seatResult{display:flex; flex-wrap:wrap; gap:16px;}
     .table{
-      width:280px; background:#fafafa; border:2px solid #333; border-radius:12px;
-      padding:12px;
+      width:280px; background:#fafafa; border:2px solid #333;
+      border-radius:12px; padding:12px;
     }
-    .table-title{font-weight:900; text-align:center; margin-bottom:10px;}
-    .row{display:flex; justify-content:space-between; margin-bottom:10px;}
+    .table-title{
+      font-weight:900; text-align:center; margin-bottom:10px;
+    }
+    .row{
+      display:flex; justify-content:space-between; margin-bottom:10px;
+    }
 
     .seat{
-      width:48%; min-height:48px;
-      display:flex; align-items:center; justify-content:center;
-      padding:12px 8px; border-radius:10px; box-sizing:border-box;
-      font-weight:900; text-align:center; word-break:break-word;
+      width:48%; min-height:54px;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:8px; border-radius:10px;
+      box-sizing:border-box;
+      font-weight:900; text-align:center;
+      word-break:break-word;
     }
     .seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
+    .seat.triad{background:#dcfce7; border:2px solid #16a34a;}
     .seat.solo{background:#fff7ed; border:2px dashed #f97316;}
     .seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
 
+    .q5{
+      font-size:12px; font-weight:700; opacity:.8; margin-top:2px;
+    }
+
     /* ===== 回答一覧 ===== */
     .table-wrap{
-      overflow-x:auto;
-      background:#fff; border:1px solid #e5e7eb;
+      overflow-x:auto; background:#fff; border:1px solid #e5e7eb;
       border-radius:12px; padding:10px;
     }
-    table{border-collapse:collapse; width:100%; min-width:900px; background:#fff;}
-    th,td{border:1px solid #ddd; padding:10px 8px; font-size:13px; text-align:center; white-space:nowrap;}
+    table{border-collapse:collapse; width:100%; min-width:820px;}
+    th,td{
+      border:1px solid #ddd; padding:8px 6px;
+      font-size:13px; text-align:center; white-space:nowrap;
+    }
     th{background:#f3f4f6; font-weight:900;}
     td.name{text-align:left; font-weight:900;}
-    .badge{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ddd; background:#fff; font-weight:900; font-size:12px;}
   </style>
 </head>
 
@@ -80,37 +79,14 @@
   <div class="controls">
     <button class="btn-primary" onclick="loadAll()">最新を読み込む</button>
     <button class="btn-danger" onclick="resetAll()">回答をリセット</button>
-    <button class="btn-primary" onclick="publishSeats()">座席を公開</button>
-
   </div>
 
-  <!-- 質問編集 -->
-  <div class="card">
-    <div style="font-weight:900; margin-bottom:8px;">質問文の編集（Q1〜Q5）</div>
-    <div class="grid">
-      <div class="qrow"><label>Q1</label><input id="q1Input" placeholder="Q1の質問文" /></div>
-      <div class="qrow"><label>Q2</label><input id="q2Input" placeholder="Q2の質問文" /></div>
-      <div class="qrow"><label>Q3</label><input id="q3Input" placeholder="Q3の質問文" /></div>
-      <div class="qrow"><label>Q4</label><input id="q4Input" placeholder="Q4の質問文" /></div>
-      <div class="qrow"><label>Q5</label><input id="q5Input" placeholder="Q5の質問文" /></div>
-
-
-      <div class="controls" style="margin:6px 0 0 0;">
-        <button class="btn-ghost" onclick="loadQuestionsToAdmin()">質問を読み込む</button>
-        <button class="btn-primary" id="saveQBtn" onclick="saveQuestionsFromAdmin()">質問を保存</button>
-      </div>
-
-      <div class="hint">※保存後、参加者ページは再読み込みすると新しい質問文が表示されます。</div>
-    </div>
+  <div class="meta" id="metaBox">
+    読み込み前です。「最新を読み込む」を押してください。
   </div>
 
-  <!-- 集計メタ -->
-  <div class="card" id="metaBox">読み込み前です。「最新を読み込む」を押してください。</div>
-
-  <!-- 座席 -->
   <div id="seatResult"></div>
 
-  <!-- 回答一覧 -->
   <h2>回答一覧</h2>
   <div class="table-wrap">
     <table id="answerTable">
@@ -122,8 +98,7 @@
           <th>Q2</th>
           <th>Q3</th>
           <th>Q4</th>
-<th>Q5（要約・編集可）</th>
-<th>Q5（原文）</th>
+          <th>Q5（要約）</th>
           <th>回答時刻</th>
         </tr>
       </thead>
@@ -131,209 +106,111 @@
     </table>
   </div>
 
-  <script>
-    const yn = (v) => (v === true ? "Yes" : v === false ? "No" : "");
-    const safe = (v) => (v ?? "").toString();
+<script>
+/* ===== 共通 ===== */
+const yn = (v) => (v === true ? "Yes" : v === false ? "No" : "");
+const safe = (v) => (v ?? "").toString();
+const esc = (s) => String(s ?? "")
+  .replaceAll("&","&amp;")
+  .replaceAll("<","&lt;")
+  .replaceAll(">","&gt;")
+  .replaceAll('"',"&quot;")
+  .replaceAll("'","&#39;");
 
-async function publishSeats(){
-  if(!confirm("座席を公開します。参加者側に表示されます。よろしいですか？")) return;
-  const res = await fetch("/api/publish", { method: "POST" });
-  const json = await res.json().catch(()=>({}));
-  if(!res.ok || !json.ok){ alert("公開に失敗しました"); return; }
-  alert("座席を公開しました");
+/* ===== データ取得 ===== */
+async function loadAll() {
+  const aRes = await fetch("/api/assignments", { cache:"no-store" });
+  if (!aRes.ok) { alert("取得失敗: /api/assignments"); return; }
+  const aJson = await aRes.json();
+
+  const rRes = await fetch("/api/responses", { cache:"no-store" });
+  if (!rRes.ok) { alert("取得失敗: /api/responses"); return; }
+  const rJson = await rRes.json();
+
+  const rows = Array.isArray(rJson.rows) ? rJson.rows : [];
+  const tables = Array.isArray(aJson.tables) ? aJson.tables : [];
+
+  document.getElementById("metaBox").innerHTML =
+    `回答数：<strong>${rows.length}</strong> 名`;
+
+  renderTables(tables);
+  renderAnswers(rows);
 }
 
-    async function loadQuestionsToAdmin(){
-      const res = await fetch("/api/questions", { cache: "no-store" });
-      const json = await res.json().catch(()=>({}));
-      if(!json.ok){ alert("質問の取得に失敗しました"); return; }
-      const q = json.questions || {};
-      document.getElementById("q1Input").value = q.q1 || "";
-      document.getElementById("q2Input").value = q.q2 || "";
-      document.getElementById("q3Input").value = q.q3 || "";
-      document.getElementById("q4Input").value = q.q4 || "";
-      document.getElementById("q5Input").value = q.q5 || "";
+/* ===== 座席描画 ===== */
+function renderTables(tables){
+  const root = document.getElementById("seatResult");
+  root.innerHTML = "";
 
-    }
-
-    async function saveQuestionsFromAdmin(){
-      const btn = document.getElementById("saveQBtn");
-      btn.disabled = true;
-
-const payload = {
-  q1: document.getElementById("q1Input").value,
-  q2: document.getElementById("q2Input").value,
-  q3: document.getElementById("q3Input").value,
-  q4: document.getElementById("q4Input").value,
-  q5: document.getElementById("q5Input").value,
-};
-
-      try{
-        const res = await fetch("/api/questions", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify(payload)
-        });
-        const json = await res.json().catch(()=>({}));
-        if(!res.ok || !json.ok){
-          alert("保存に失敗しました");
-        }else{
-          alert("質問文を保存しました");
-        }
-      }catch(e){
-        alert("保存に失敗しました");
-      }finally{
-        btn.disabled = false;
-      }
-    }
-
-    async function loadAll() {
-      const aRes = await fetch("/api/assignments", { cache: "no-store" });
-      if (!aRes.ok) { alert("取得失敗: /api/assignments"); return; }
-      const aJson = await aRes.json().catch(()=>({}));
-      const blocks = Array.isArray(aJson.blocks) ? aJson.blocks : [];
-
-      const rRes = await fetch("/api/responses", { cache: "no-store" });
-      if (!rRes.ok) { alert("取得失敗: /api/responses"); return; }
-      const rJson = await rRes.json().catch(()=>({}));
-      const responses = Array.isArray(rJson.rows) ? rJson.rows : [];
-
-      const meta = document.getElementById("metaBox");
-      meta.innerHTML = `回答数：<strong>${safe(rJson.count ?? aJson.count ?? responses.length ?? 0)}</strong> 名`;
-
-      renderSeats(blocks);
-      renderAnswers(responses);
-    }
-
-    async function resetAll() {
-      if (!confirm("本当に全回答を削除しますか？")) return;
-      const res = await fetch("/api/reset", { method: "POST" });
-      if (!res.ok) { alert("リセット失敗: /api/reset"); return; }
-      document.getElementById("seatResult").innerHTML = "";
-      document.querySelector("#answerTable tbody").innerHTML = "";
-      document.getElementById("metaBox").innerHTML = "リセットしました。";
-    }
-
-async function saveQ5Short(id){
-  const input = document.querySelector(`input.q5short[data-id="${id}"]`);
-  if(!input) return;
-
-  const val = (input.value || "").replace(/\s+/g,"").slice(0,5);
-  if(!val){ alert("5文字以内で入力してください"); return; }
-
-  const res = await fetch(`/api/responses/${encodeURIComponent(id)}/q5_short`, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ q5_short: val })
-  });
-  const json = await res.json().catch(()=>({}));
-  if(!res.ok || !json.ok){
-    alert(json.error || "保存に失敗しました");
+  if (!tables.length){
+    root.innerHTML = `<div class="meta">座席データがまだありません</div>`;
     return;
   }
-  alert("保存しました");
+
+  for (const t of tables){
+    const el = document.createElement("div");
+    el.className = "table";
+    el.innerHTML = `
+      <div class="table-title">テーブル ${t.tableNo}</div>
+      <div class="row">
+        ${seatCell(findSeat(t.seats,"左上"))}
+        ${seatCell(findSeat(t.seats,"右上"))}
+      </div>
+      <div class="row">
+        ${seatCell(findSeat(t.seats,"左下"))}
+        ${seatCell(findSeat(t.seats,"右下"))}
+      </div>
+    `;
+    root.appendChild(el);
+  }
 }
 
+function findSeat(seats,pos){
+  return (seats||[]).find(s=>s.pos===pos) || { empty:true };
+}
 
-    // triad/奇数対応（表示）
-    function renderSeats(blocks) {
-      const container = document.getElementById("seatResult");
-      container.innerHTML = "";
+function seatCell(seat){
+  if (seat.empty){
+    return `<div class="seat empty">空席</div>`;
+  }
+  const type = seat.blockType || "pair";
+  return `
+    <div class="seat ${type}">
+      <div>${esc(seat.name)}</div>
+      <div class="q5">${esc(seat.q5)}</div>
+    </div>
+  `;
+}
 
-      let tableNo = 1;
-      let i = 0;
+/* ===== 回答一覧 ===== */
+function renderAnswers(rows){
+  const tb = document.querySelector("#answerTable tbody");
+  tb.innerHTML = "";
+  rows.forEach((r,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td class="name">${esc(r.name)}</td>
+      <td>${yn(r.q1)}</td>
+      <td>${yn(r.q2)}</td>
+      <td>${yn(r.q3)}</td>
+      <td>${yn(r.q4)}</td>
+      <td>${esc(r.q5_short || "")}</td>
+      <td>${esc(r.created_at || "")}</td>
+    `;
+    tb.appendChild(tr);
+  });
+}
 
-      while (i < blocks.length) {
-        const b1 = blocks[i];
-
-        // triad：上段2人、下段左に3人目
-        if (b1 && b1.type === "triad") {
-          const el = document.createElement("div");
-          el.className = "table";
-          el.innerHTML = `
-            <div class="table-title">テーブル ${tableNo}</div>
-            <div class="row">
-              ${seatHtml(b1, 0)}
-              ${seatHtml(b1, 1)}
-            </div>
-            <div class="row">
-              ${seatHtml(b1, 2)}
-              <div class="seat empty">空席</div>
-            </div>
-          `;
-          container.appendChild(el);
-          tableNo++;
-          i += 1;
-          continue;
-        }
-
-        // pair：2ブロックで1テーブル（最後が余れば空席）
-        const top = blocks[i];
-        const bottom = blocks[i + 1];
-
-        const el = document.createElement("div");
-        el.className = "table";
-        el.innerHTML = `
-          <div class="table-title">テーブル ${tableNo}</div>
-          <div class="row">
-            ${seatHtml(top, 0)}
-            ${seatHtml(top, 1)}
-          </div>
-          <div class="row">
-            ${seatHtml(bottom, 0)}
-            ${seatHtml(bottom, 1)}
-          </div>
-        `;
-        container.appendChild(el);
-        tableNo++;
-        i += 2;
-      }
-    }
-
-    function seatHtml(block, idx) {
-      if (!block || !Array.isArray(block.members) || !block.members[idx]) {
-        return `<div class="seat empty">空席</div>`;
-      }
-      const m = block.members[idx];
-      const name = safe(m.name || "（名前なし）");
-      const cls = (block.type === "triad") ? "seat solo" : "seat pair";
-      return `<div class="${cls}">${name}</div>`;
-    }
-
-    function renderAnswers(responses) {
-      const tbody = document.querySelector("#answerTable tbody");
-      tbody.innerHTML = "";
-      responses.forEach((r, i) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${i + 1}</td>
-          <td class="name">${safe(r.name)}</td>
-          <td><span class="badge">${yn(r.q1)}</span></td>
-          <td><span class="badge">${yn(r.q2)}</span></td>
-          <td><span class="badge">${yn(r.q3)}</span></td>
-          <td><span class="badge">${yn(r.q4)}</span></td>
-<td>
-  <input
-    data-id="${safe(r.id)}"
-    class="q5short"
-    value="${safe(r.q5_short ?? "")}"
-    style="width:140px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:8px;"
-    maxlength="5"
-  />
-  <button
-    class="btn-ghost"
-    style="margin-left:6px; padding:6px 10px;"
-    onclick="saveQ5Short('${safe(r.id)}')"
-  >保存</button>
-</td>
-<td title="${safe(r.q5)}">${safe(r.q5)}</td>
-          <td>${safe(r.created_at)}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    window.addEventListener("DOMContentLoaded", loadQuestionsToAdmin);
-  </script>
+/* ===== リセット ===== */
+async function resetAll(){
+  if(!confirm("本当に全回答を削除しますか？")) return;
+  const r = await fetch("/api/reset",{method:"POST"});
+  if(!r.ok){ alert("リセット失敗"); return; }
+  document.getElementById("seatResult").innerHTML="";
+  document.querySelector("#answerTable tbody").innerHTML="";
+  document.getElementById("metaBox").innerText="リセットしました。";
+}
+</script>
 </body>
 </html>
