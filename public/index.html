@@ -111,7 +111,6 @@
     <div class="card">
       <div class="label">お名前</div>
       <input id="name" type="text" placeholder="例：山田 太郎" />
-      <div class="hint">※送信後、座席公開までこの画面は開いたままでOKです</div>
     </div>
 
     <!-- Q1〜Q4 -->
@@ -155,7 +154,6 @@
     <div class="card">
 	<div class="label" id="q5Label"></div>
       <textarea id="q5" placeholder="例：〇〇が得意（長い文章はAIによって5文字以内に編集されます）"></textarea>
-      <div class="hint">※必須項目です</div>
 
       <div class="footer">
         <button id="submitBtn" class="btn btn-primary" onclick="submitForm()">送信する</button>
@@ -166,17 +164,11 @@
 
     <!-- 座席表示（参加者） -->
     <div id="seatBox" class="card" style="display:none;">
-      <div class="label">あなたの座席（テーブル表示）</div>
+　　　　meta.textContent = "";
       <div id="seatMeta" class="hint"></div>
       <div id="seatResult" style="margin-top:10px;"></div>
-      <div class="hint" style="margin-top:10px;">
-        ※自慢は5文字以内で表示されます
-      </div>
     </div>
 
-    <div class="hint">
-      ※運営ページでQ1〜Q4の文言を変更すると、こちらも反映されます（再読み込みで更新）。
-    </div>
   </div>
 
   <script>
