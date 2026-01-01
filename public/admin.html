@@ -16,78 +16,133 @@
     .controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
     button{
       padding:10px 14px; border:none; border-radius:10px;
-      cursor:pointer; font-weight:800;
+      cursor:pointer; font-weight:900;
     }
     .btn-primary{background:#2563eb; color:#fff;}
+    .btn-secondary{background:#111827; color:#fff;}
+    .btn-warning{background:#f59e0b; color:#111;}
     .btn-danger{background:#dc2626; color:#fff;}
+    .btn-muted{background:#6b7280; color:#fff;}
 
     .meta{
       background:#fff; border:1px solid #e5e7eb; border-radius:12px;
       padding:12px 14px; margin:10px 0 14px 0; font-size:14px;
     }
+    .status-pill{
+      display:inline-block; padding:3px 10px; border-radius:999px;
+      font-weight:900; font-size:12px; margin-left:8px;
+      border:1px solid #ddd; background:#fff;
+    }
+    .pill-on{border-color:#16a34a; color:#16a34a;}
+    .pill-off{border-color:#dc2626; color:#dc2626;}
+
+    /* ===== 質問編集 ===== */
+    .card{
+      background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+      padding:12px 14px; margin:10px 0 14px 0;
+    }
+    .qgrid{
+      display:grid; grid-template-columns: 1fr;
+      gap:10px;
+    }
+    .qrow label{display:block; font-weight:900; margin-bottom:6px;}
+    .qrow input{
+      width:100%; box-sizing:border-box;
+      padding:10px 12px; border:1px solid #d1d5db; border-radius:10px;
+      font-size:14px;
+    }
+    .qhelp{font-size:12px; opacity:.8; margin-top:6px;}
 
     /* ===== テーブル表示 ===== */
     #seatResult{display:flex; flex-wrap:wrap; gap:14px;}
-
     .table{
       width:280px; background:#fafafa; border:2px solid #333;
       border-radius:12px; padding:12px;
     }
-    .table-title{
-      font-weight:900; text-align:center; margin-bottom:10px;
-    }
-    .row{
-      display:flex; justify-content:space-between; margin-bottom:10px;
-    }
-
+    .table-title{font-weight:900; text-align:center; margin-bottom:10px;}
+    .row{display:flex; justify-content:space-between; margin-bottom:10px;}
     .seat{
       width:48%; min-height:54px;
       display:flex; flex-direction:column;
       align-items:center; justify-content:center;
-      padding:8px; border-radius:10px;
-      box-sizing:border-box;
-      font-weight:900; text-align:center;
-      word-break:break-word;
+      padding:8px; border-radius:10px; box-sizing:border-box;
+      font-weight:900; text-align:center; word-break:break-word;
     }
     .seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
     .seat.triad{background:#dcfce7; border:2px solid #16a34a;}
     .seat.solo{background:#fff7ed; border:2px dashed #f97316;}
     .seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
-
-    .q5{
-      font-size:12px; font-weight:700; opacity:.8; margin-top:2px;
-    }
+    .q5{font-size:12px; font-weight:700; opacity:.85; margin-top:2px;}
 
     /* ===== 回答一覧 ===== */
     .table-wrap{
       overflow-x:auto; background:#fff; border:1px solid #e5e7eb;
       border-radius:12px; padding:10px;
     }
-    table{border-collapse:collapse; width:100%; min-width:820px;}
-    th,td{
-      border:1px solid #ddd; padding:8px 6px;
-      font-size:13px; text-align:center; white-space:nowrap;
-    }
+    table{border-collapse:collapse; width:100%; min-width:860px;}
+    th,td{border:1px solid #ddd; padding:8px 6px; font-size:13px; text-align:center; white-space:nowrap;}
     th{background:#f3f4f6; font-weight:900;}
     td.name{text-align:left; font-weight:900;}
+    td.edit{min-width:160px;}
+    .editbox{
+      width:140px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;
+      font-size:13px;
+    }
+    .mini-btn{
+      padding:6px 10px; border-radius:8px; font-weight:900; cursor:pointer; border:none;
+      margin-left:6px;
+    }
   </style>
 </head>
 
 <body>
-  <h1>運営用｜座席割り当て</h1>
+  <h1>
+    運営用｜座席割り当て
+    <span id="pubPill" class="status-pill pill-off">未公開</span>
+  </h1>
 
   <div class="controls">
     <button class="btn-primary" onclick="loadAll()">最新を読み込む</button>
+    <button class="btn-muted" onclick="loadQuestions()">質問を読み込む</button>
+    <button class="btn-secondary" onclick="saveQuestions()">質問を保存</button>
+    <button class="btn-warning" onclick="publishSeats(true)">座席を公開</button>
+    <button class="btn-muted" onclick="publishSeats(false)">公開を解除</button>
     <button class="btn-danger" onclick="resetAll()">回答をリセット</button>
   </div>
 
-  <div class="meta" id="metaBox">
-    読み込み前です。「最新を読み込む」を押してください。
+  <div class="meta" id="metaBox">読み込み前です。「最新を読み込む」を押してください。</div>
+
+  <!-- 質問編集 -->
+  <div class="card">
+    <h2 style="margin:0 0 10px 0;">質問文の編集（Q1〜Q5）</h2>
+    <div class="qgrid">
+      <div class="qrow">
+        <label>Q1</label>
+        <input id="q1" placeholder="例：自分から話題を出して会話をリードすることが好き" />
+      </div>
+      <div class="qrow">
+        <label>Q2</label>
+        <input id="q2" placeholder="例：会話では、過去の話よりも未来の夢の話をする方が好き" />
+      </div>
+      <div class="qrow">
+        <label>Q3</label>
+        <input id="q3" placeholder="例：今日は、価値観や考え方が違う人と話してみたい" />
+      </div>
+      <div class="qrow">
+        <label>Q4</label>
+        <input id="q4" placeholder="例：会話では、聞き役になることが多い" />
+      </div>
+      <div class="qrow">
+        <label>Q5（自由記述）</label>
+        <input id="q5" placeholder="例：自慢できること（短く）を書いてください" />
+        <div class="qhelp">※参加者側の表示に反映されます。保存後、参加者側を強制リロードすると反映されます。</div>
+      </div>
+    </div>
   </div>
 
   <div id="seatResult"></div>
 
-  <h2>回答一覧</h2>
+  <h2>回答一覧（Q5要約は編集できます）</h2>
   <div class="table-wrap">
     <table id="answerTable">
       <thead>
@@ -99,6 +154,7 @@
           <th>Q3</th>
           <th>Q4</th>
           <th>Q5（要約）</th>
+          <th>要約編集</th>
           <th>回答時刻</th>
         </tr>
       </thead>
@@ -109,7 +165,6 @@
 <script>
 /* ===== 共通 ===== */
 const yn = (v) => (v === true ? "Yes" : v === false ? "No" : "");
-const safe = (v) => (v ?? "").toString();
 const esc = (s) => String(s ?? "")
   .replaceAll("&","&amp;")
   .replaceAll("<","&lt;")
@@ -130,11 +185,74 @@ async function loadAll() {
   const rows = Array.isArray(rJson.rows) ? rJson.rows : [];
   const tables = Array.isArray(aJson.tables) ? aJson.tables : [];
 
-  document.getElementById("metaBox").innerHTML =
-    `回答数：<strong>${rows.length}</strong> 名`;
+  document.getElementById("metaBox").innerHTML = `回答数：<strong>${rows.length}</strong> 名`;
 
   renderTables(tables);
   renderAnswers(rows);
+
+  // 公開状態も表示（失敗しても座席表示はできるようにする）
+  try {
+    const st = await fetch("/api/publish", { cache:"no-store" }).then(r=>r.json());
+    setPill(Boolean(st.published));
+  } catch {}
+}
+
+/* ===== 公開状態 pill ===== */
+function setPill(published){
+  const pill = document.getElementById("pubPill");
+  if (published){
+    pill.textContent = "公開中";
+    pill.classList.remove("pill-off");
+    pill.classList.add("pill-on");
+  } else {
+    pill.textContent = "未公開";
+    pill.classList.remove("pill-on");
+    pill.classList.add("pill-off");
+  }
+}
+
+/* ===== 質問の読み込み/保存 ===== */
+async function loadQuestions(){
+  const r = await fetch("/api/questions", { cache:"no-store" });
+  if (!r.ok){ alert("質問の取得に失敗しました"); return; }
+  const j = await r.json();
+  const q = j.questions || {};
+  document.getElementById("q1").value = q.q1 || "";
+  document.getElementById("q2").value = q.q2 || "";
+  document.getElementById("q3").value = q.q3 || "";
+  document.getElementById("q4").value = q.q4 || "";
+  document.getElementById("q5").value = q.q5 || "";
+  alert("質問を読み込みました");
+}
+
+async function saveQuestions(){
+  const body = {
+    q1: document.getElementById("q1").value,
+    q2: document.getElementById("q2").value,
+    q3: document.getElementById("q3").value,
+    q4: document.getElementById("q4").value,
+    q5: document.getElementById("q5").value,
+  };
+  const r = await fetch("/api/questions", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok){ alert("質問の保存に失敗しました"); return; }
+  alert("質問を保存しました（参加者側は強制リロードで反映）");
+}
+
+/* ===== 座席公開/解除 ===== */
+async function publishSeats(on){
+  const r = await fetch("/api/publish", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ publish: !!on })
+  });
+  if (!r.ok){ alert("公開状態の更新に失敗しました"); return; }
+  const j = await r.json();
+  setPill(Boolean(j.published));
+  alert(on ? "座席を公開しました" : "公開を解除しました");
 }
 
 /* ===== 座席描画 ===== */
@@ -143,7 +261,7 @@ function renderTables(tables){
   root.innerHTML = "";
 
   if (!tables.length){
-    root.innerHTML = `<div class="meta">座席データがまだありません</div>`;
+    root.innerHTML = `<div class="meta">座席データがまだありません（回答が1名の場合でも表示されるはずです）</div>`;
     return;
   }
 
@@ -177,16 +295,18 @@ function seatCell(seat){
   return `
     <div class="seat ${type}">
       <div>${esc(seat.name)}</div>
-      <div class="q5">${esc(seat.q5)}</div>
+      <div class="q5">${esc(seat.q5 || "")}</div>
     </div>
   `;
 }
 
-/* ===== 回答一覧 ===== */
+/* ===== 回答一覧（Q5要約の編集） ===== */
 function renderAnswers(rows){
   const tb = document.querySelector("#answerTable tbody");
   tb.innerHTML = "";
   rows.forEach((r,i)=>{
+    const id = esc(r.id || "");
+    const short = esc(r.q5_short || "");
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i+1}</td>
@@ -195,21 +315,38 @@ function renderAnswers(rows){
       <td>${yn(r.q2)}</td>
       <td>${yn(r.q3)}</td>
       <td>${yn(r.q4)}</td>
-      <td>${esc(r.q5_short || "")}</td>
+      <td>${short}</td>
+      <td class="edit">
+        <input class="editbox" id="q5s_${id}" value="${short}" maxlength="12" />
+        <button class="mini-btn btn-secondary" onclick="saveQ5Short('${id}')">保存</button>
+      </td>
       <td>${esc(r.created_at || "")}</td>
     `;
     tb.appendChild(tr);
   });
 }
 
+async function saveQ5Short(id){
+  const v = document.getElementById("q5s_" + id)?.value ?? "";
+  const r = await fetch("/api/q5short", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ id, q5_short: v })
+  });
+  if (!r.ok){ alert("要約の保存に失敗しました"); return; }
+  alert("要約を保存しました");
+  // 反映を確認したい場合は loadAll() を押す
+}
+
 /* ===== リセット ===== */
 async function resetAll(){
-  if(!confirm("本当に全回答を削除しますか？")) return;
+  if(!confirm("本当に全回答を削除しますか？（公開も解除されます）")) return;
   const r = await fetch("/api/reset",{method:"POST"});
   if(!r.ok){ alert("リセット失敗"); return; }
   document.getElementById("seatResult").innerHTML="";
   document.querySelector("#answerTable tbody").innerHTML="";
   document.getElementById("metaBox").innerText="リセットしました。";
+  setPill(false);
 }
 </script>
 </body>
