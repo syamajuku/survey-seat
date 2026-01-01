@@ -335,6 +335,30 @@ function assignSeats(rows) {
 function buildTables(rows) {
   const blocks = assignSeats(rows);
 
+  // ★追加：回答が1名などで blocks が空になる場合でもテーブルを作る
+  if (rows.length > 0 && blocks.length === 0) {
+    const m = rows[0];
+    const one = {
+      tableNo: 1,
+      seats: [
+        {
+          pos: "左上",
+          id: m.id,
+          name: m.name,
+          q5: m.q5_short ?? summarizeFallback(m.q5, 5),
+          blockType: "solo",
+        },
+        { pos: "右上", empty: true },
+        { pos: "左下", empty: true },
+        { pos: "右下", empty: true },
+      ],
+    };
+
+    const idToTable = new Map([[String(m.id), 1]]);
+    return { tables: [one], idToTable, blocks: [] };
+  }
+
+
   function seat(block, idx, pos) {
     const m = block.members[idx];
     if (!m) return { pos, empty: true };
