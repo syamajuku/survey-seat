@@ -356,11 +356,11 @@ function renderAnswers(rows){
       <td>${yn(r.q3)}</td>
       <td>${yn(r.q4)}</td>
       <td>${short}</td>
-      <td>${original}</td> <!-- ← 追加（原文） -->
       <td class="edit">
         <input class="editbox" id="q5s_${id}" value="${short}" maxlength="12" />
         <button class="mini-btn btn-secondary" onclick="saveQ5Short('${id}')">保存</button>
       </td>
+      <td>${original}</td> <!-- ← 追加（原文） -->
       <td>${esc(r.created_at || "")}</td>
     `;
     tb.appendChild(tr);
