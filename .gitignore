@@ -4,3 +4,6 @@ node_modules/
 
 # macOS
 .DS_Store
+
+# local-only (DB is source of truth)
+data/responses.json

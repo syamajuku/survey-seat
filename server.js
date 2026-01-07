@@ -358,7 +358,6 @@ function buildTables(rows) {
     return { tables: [one], idToTable, blocks: [] };
   }
 
-
   function seat(block, idx, pos) {
     const m = block.members[idx];
     if (!m) return { pos, empty: true };
