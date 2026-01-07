@@ -1,0 +1,9 @@
+mkdir -p data
+cat > data/questions.json <<'JSON'
+{
+  "q1": "Q1の質問文",
+  "q2": "Q2の質問文",
+  "q3": "Q3の質問文",
+  "q4": "Q4の質問文"
+}
+JSON
