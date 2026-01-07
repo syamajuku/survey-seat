@@ -193,6 +193,7 @@
           <th>Q4</th>
           <th>Q5（要約）</th>
           <th>要約編集</th>
+          <th>Q5（原文）</th>
           <th>回答時刻</th>
         </tr>
       </thead>
@@ -345,6 +346,7 @@ function renderAnswers(rows){
   rows.forEach((r,i)=>{
     const id = esc(r.id || "");
     const short = esc(r.q5_short || "");
+    const original = esc(r.q5 || ""); // ← 追加（原文）
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i+1}</td>
@@ -354,6 +356,7 @@ function renderAnswers(rows){
       <td>${yn(r.q3)}</td>
       <td>${yn(r.q4)}</td>
       <td>${short}</td>
+      <td>${original}</td> <!-- ← 追加（原文） -->
       <td class="edit">
         <input class="editbox" id="q5s_${id}" value="${short}" maxlength="12" />
         <button class="mini-btn btn-secondary" onclick="saveQ5Short('${id}')">保存</button>
