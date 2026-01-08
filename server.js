@@ -518,6 +518,12 @@ app.post("/api/publish", async (req, res) => {
   res.json({ ok: true, ...st });
 });
 
+// 公開状態 取得（参加者・運営 共通）
+app.get("/api/publish", async (req, res) => {
+  const st = await readState();
+  res.json({ ok: true, ...st }); // => { ok:true, published:true/false }
+});
+
 // 自分の席（参加者）
 // published=false の間は published:false を返す
 app.get("/api/myseat", async (req, res) => {
