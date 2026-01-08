@@ -126,14 +126,19 @@ function summarizeFallback(text, maxLen = 5) {
 }
 
 async function summarizeByAI(text, maxLen = 5) {
+  const original = String(text ?? "").trim();
+
+  // ★追加：5文字以内ならAI要約せず、そのまま返す
+  if (original.length <= maxLen) return original;
+
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return summarizeFallback(text, maxLen);
+  if (!apiKey) return summarizeFallback(original, maxLen);
 
   const openai = new OpenAI({ apiKey });
 
   // ※ 長文でも maxLen 以内へ。失敗時はフォールバック。
   try {
-    const input = `次の文章を日本語で${maxLen}文字以内に要約。出力は要約文字列のみ。\n文章:${text}`;
+    const input = `次の文章を日本語で${maxLen}文字以内に要約。出力は要約文字列のみ。\n文章:${original}`;
     const r = await openai.responses.create({
       model: "gpt-4.1-mini",
       input,
@@ -142,7 +147,7 @@ async function summarizeByAI(text, maxLen = 5) {
     const out = String(r.output_text ?? "").replace(/\s+/g, "");
     return out.length <= maxLen ? out : out.slice(0, maxLen);
   } catch {
-    return summarizeFallback(text, maxLen);
+    return summarizeFallback(original, maxLen);
   }
 }
 
