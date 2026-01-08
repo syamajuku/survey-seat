@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>アンケート</title>
+  <title>座席最適化AI</title>
   <style>
     :root{
       --bg:#f6f7fb;
@@ -107,7 +107,7 @@
 
 <body>
   <div class="wrap">
-    <h1>アンケート（所要時間：約1分）</h1>
+    <h1>座席最適化AI</h1>
 
     <!-- 名前 -->
     <div class="card">
@@ -294,7 +294,7 @@ async function submitForm(){
             history.replaceState(null, "", url.toString());
           }
 
-          showMsg("送信しました。", true);
+          showMessage("入力ありがとうございました。座席公開までお待ちください。");
 
           // 入力をリセット（名前は残す運用）
           document.getElementById("q5").value = "";
