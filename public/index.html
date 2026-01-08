@@ -294,7 +294,7 @@ async function submitForm(){
             history.replaceState(null, "", url.toString());
           }
 
-          showMessage("入力ありがとうございました。座席公開までお待ちください。");
+          showMsg("入力ありがとうございました。座席公開までお待ちください。", true);
 
           // 入力をリセット（名前は残す運用）
           document.getElementById("q5").value = "";
