@@ -113,6 +113,14 @@
       <input id="name" type="text" placeholder="例：山田 太郎" />
     </div>
 
+<div class="card">
+  <div class="label">メールアドレス（修正用）</div>
+  <input id="email" type="email" placeholder="例：example@example.com" />
+  <div class="hint">
+    同じメールアドレスで再入力すると、内容を修正できます。
+  </div>
+</div>
+
     <!-- Q1〜Q4 -->
     <div class="card">
       <div class="label">質問（Yes / No）</div>
@@ -221,38 +229,49 @@
         .replaceAll("'","&#39;");
     }
 
-    async function submitForm(){
-      const name = document.getElementById("name").value.trim();
-      const q5 = document.getElementById("q5").value.trim();
+async function submitForm(){
+  const name  = document.getElementById("name").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const q5    = document.getElementById("q5").value.trim();
 
-      if(!name){ showMsg("お名前を入力してください。", false); return; }
-      for(const k of ["q1","q2","q3","q4"]){
-        if(state[k] === null){
-          showMsg("Q1〜Q4をすべて選択してください。", false);
-          return;
-        }
-      }
-      if(!q5){
-        showMsg("Q5を入力してください。", false);
-        return;
-      }
+  if(!name){
+    showMsg("お名前を入力してください。", false);
+    return;
+  }
+  if(!email){
+    showMsg("メールアドレスを入力してください。", false);
+    return;
+  }
 
-      const btn = document.getElementById("submitBtn");
-      btn.disabled = true;
-      showMsg("送信中…", true);
+  for(const k of ["q1","q2","q3","q4"]){
+    if(state[k] === null){
+      showMsg("Q1〜Q4をすべて選択してください。", false);
+      return;
+    }
+  }
 
-      try{
-        const res = await fetch("/api/responses", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({
-            name,
-            q1: state.q1, q2: state.q2, q3: state.q3, q4: state.q4,
-            q5
-          })
-        });
+  if(!q5){
+    showMsg("Q5を入力してください。", false);
+    return;
+  }
 
-        const json = await res.json().catch(()=>({}));
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  showMsg("送信中…", true);
+
+  try{
+    const res = await fetch("/api/responses", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        name,
+        email,
+        q1: state.q1, q2: state.q2, q3: state.q3, q4: state.q4,
+        q5
+      })
+    });
+
+    const json = await res.json().catch(()=>({}));
 
         if(!res.ok || !json.ok){
           showMsg(json.error || "送信に失敗しました。", false);
