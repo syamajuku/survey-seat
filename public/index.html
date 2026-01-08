@@ -305,20 +305,19 @@
       if(!box || !meta || !out) return;
 
       try{
-        const res = await fetch("/api/myseat?id=" + encodeURIComponent(id), { cache: "no-store" });
+        const res = await fetch("/api/assignments", { cache: "no-store" });
         const json = await res.json().catch(()=>({}));
 
         box.style.display = "block";
 
         // 未公開 or 取得失敗なら何も出さない（運営連絡文言も出さない）
         if(!res.ok || !json.ok) { out.innerHTML = ""; return; }
-        if(json.published === false) { out.innerHTML = ""; return; }
+          if(json.ok !== true) { out.innerHTML = ""; return; }
 
-        const tableNo = json.tableNo;
-        const seats = Array.isArray(json.tableSeats) ? json.tableSeats : [];
+          const tables = Array.isArray(json.tables) ? json.tables : [];
 
-        const seatByPos = new Map(seats.map(s => [s.pos, s]));
-        const seatHtml = (pos) => {
+          const seatByPos = new Map(seats.map(s => [s.pos, s]));
+          const seatHtml = (pos) => {
           const s = seatByPos.get(pos);
           if(!s || s.empty) return `<div class="seat empty">空席</div>`;
 
@@ -335,19 +334,42 @@
           `;
         };
 
-        out.innerHTML = `
-          <div class="table">
-            <div class="table-title">テーブル ${tableNo}</div>
-            <div class="row">
-              ${seatHtml("左上")}
-              ${seatHtml("右上")}
-            </div>
-            <div class="row">
-              ${seatHtml("左下")}
-              ${seatHtml("右下")}
-            </div>
-          </div>
-        `;
+out.innerHTML = tables.map(t => {
+  const tableNo = t.tableNo;
+  const seats = Array.isArray(t.seats) ? t.seats : [];
+  const seatByPos = new Map(seats.map(s => [s.pos, s]));
+
+  const seatHtml = (pos) => {
+    const s = seatByPos.get(pos);
+    if(!s || s.empty) return `<div class="seat empty">空席</div>`;
+
+    const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+    const clsMe = (s.id === id) ? " me" : "";
+    const name = escapeHtml(s.name);
+    const brag = escapeHtml(s.q5 || "");
+
+    return `
+      <div class="${clsBase}${clsMe}">
+        <div style="font-weight:900; line-height:1.1;">${name}</div>
+        ${brag ? `<div class="brag">${brag}</div>` : ``}
+      </div>
+    `;
+  };
+
+  return `
+    <div class="table">
+      <div class="table-title">テーブル ${tableNo}</div>
+      <div class="row">
+        ${seatHtml("左上")}
+        ${seatHtml("右上")}
+      </div>
+      <div class="row">
+        ${seatHtml("左下")}
+        ${seatHtml("右下")}
+      </div>
+    </div>
+  `;
+}).join("");
       }catch(e){
         // 通信不安定時など：何も出さない
       }
