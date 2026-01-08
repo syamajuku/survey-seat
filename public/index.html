@@ -288,92 +288,79 @@
       }
     }
 
-    async function checkSeat(){
-      // URL ?id= を優先し、なければ localStorage
-      const url = new URL(location.href);
-      const idFromUrl = url.searchParams.get("id");
-      const id = idFromUrl || localStorage.getItem("surveySeat_userId");
+async function checkSeat(){
+  // URL ?id= を優先し、なければ localStorage（idが無くても表示はする）
+  const url = new URL(location.href);
+  const idFromUrl = url.searchParams.get("id");
+  const id = idFromUrl || localStorage.getItem("surveySeat_userId") || "";
 
-      if(!id) return;
+  // URLにidがあれば localStorageにも保存（復帰用）
+  if(idFromUrl) localStorage.setItem("surveySeat_userId", idFromUrl);
 
-      // URLにidがあれば localStorageにも保存（復帰用）
-      if(idFromUrl) localStorage.setItem("surveySeat_userId", idFromUrl);
+  const box = document.getElementById("seatBox");
+  const out = document.getElementById("seatResult");
+  if(!box || !out) return;
 
-      const box = document.getElementById("seatBox");
-      const meta = document.getElementById("seatMeta");
-      const out = document.getElementById("seatResult");
-      if(!box || !meta || !out) return;
+  try{
+    // 全席表示エリアは常に出す（未公開なら中身は空）
+    box.style.display = "block";
 
-      try{
-        const res = await fetch("/api/assignments", { cache: "no-store" });
-        const json = await res.json().catch(()=>({}));
-
-        box.style.display = "block";
-
-        // 未公開 or 取得失敗なら何も出さない（運営連絡文言も出さない）
-        if(!res.ok || !json.ok) { out.innerHTML = ""; return; }
-          if(json.ok !== true) { out.innerHTML = ""; return; }
-
-          const tables = Array.isArray(json.tables) ? json.tables : [];
-
-          const seatByPos = new Map(seats.map(s => [s.pos, s]));
-          const seatHtml = (pos) => {
-          const s = seatByPos.get(pos);
-          if(!s || s.empty) return `<div class="seat empty">空席</div>`;
-
-          const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
-          const clsMe = (s.id === id) ? " me" : "";
-          const name = escapeHtml(s.name);
-          const brag = escapeHtml(s.q5 || "");
-
-          return `
-            <div class="${clsBase}${clsMe}">
-              <div style="font-weight:900; line-height:1.1;">${name}</div>
-              ${brag ? `<div class="brag">${brag}</div>` : ``}
-            </div>
-          `;
-        };
-
-out.innerHTML = tables.map(t => {
-  const tableNo = t.tableNo;
-  const seats = Array.isArray(t.seats) ? t.seats : [];
-  const seatByPos = new Map(seats.map(s => [s.pos, s]));
-
-  const seatHtml = (pos) => {
-    const s = seatByPos.get(pos);
-    if(!s || s.empty) return `<div class="seat empty">空席</div>`;
-
-    const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
-    const clsMe = (s.id === id) ? " me" : "";
-    const name = escapeHtml(s.name);
-    const brag = escapeHtml(s.q5 || "");
-
-    return `
-      <div class="${clsBase}${clsMe}">
-        <div style="font-weight:900; line-height:1.1;">${name}</div>
-        ${brag ? `<div class="brag">${brag}</div>` : ``}
-      </div>
-    `;
-  };
-
-  return `
-    <div class="table">
-      <div class="table-title">テーブル ${tableNo}</div>
-      <div class="row">
-        ${seatHtml("左上")}
-        ${seatHtml("右上")}
-      </div>
-      <div class="row">
-        ${seatHtml("左下")}
-        ${seatHtml("右下")}
-      </div>
-    </div>
-  `;
-}).join("");
-      }catch(e){
-        // 通信不安定時など：何も出さない
-      }
+    // 1) まず公開状態を確認（未公開なら何も表示しない）
+    const stRes = await fetch("/api/publish", { cache:"no-store" });
+    const stJson = await stRes.json().catch(()=>({}));
+    if(!stRes.ok || !stJson.ok || stJson.published !== true){
+      out.innerHTML = "";
+      return;
     }
+
+    // 2) 公開中：全席を取得
+    const res = await fetch("/api/assignments", { cache: "no-store" });
+    const json = await res.json().catch(()=>({}));
+    if(!res.ok || !json.ok) { out.innerHTML = ""; return; }
+
+    const tables = Array.isArray(json.tables) ? json.tables : [];
+    if(!tables.length) { out.innerHTML = ""; return; }
+
+    out.innerHTML = tables.map(t => {
+      const tableNo = t.tableNo;
+      const seats = Array.isArray(t.seats) ? t.seats : [];
+      const seatByPos = new Map(seats.map(s => [s.pos, s]));
+
+      const seatHtml = (pos) => {
+        const s = seatByPos.get(pos);
+        if(!s || s.empty) return `<div class="seat empty">空席</div>`;
+
+        const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+        const clsMe = (id && s.id === id) ? " me" : "";
+        const name = escapeHtml(s.name);
+        const brag = escapeHtml(s.q5 || "");
+
+        return `
+          <div class="${clsBase}${clsMe}">
+            <div style="font-weight:900; line-height:1.1;">${name}</div>
+            ${brag ? `<div class="brag">${brag}</div>` : ``}
+          </div>
+        `;
+      };
+
+      return `
+        <div class="table">
+          <div class="table-title">テーブル ${tableNo}</div>
+          <div class="row">
+            ${seatHtml("左上")}
+            ${seatHtml("右上")}
+          </div>
+          <div class="row">
+            ${seatHtml("左下")}
+            ${seatHtml("右下")}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }catch(e){
+    out.innerHTML = "";
+  }
+}
 
     // 初期化
     window.addEventListener("DOMContentLoaded", () => {
