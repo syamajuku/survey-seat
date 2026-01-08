@@ -4,6 +4,7 @@
 // - 既存UI想定：/api/questions, /api/responses, /api/assignments, /api/publish, /api/myseat, /api/reset
 // - Q5要約：OPENAI_API_KEY があればAI要約、無ければフォールバック
 // - 運営で要約Q5を編集：POST /api/q5short
+// - ★追加：email を入力してもらい、同一 email は同一人物として UPSERT で更新する
 
 import express from "express";
 import path from "path";
@@ -37,6 +38,7 @@ async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS responses (
       id TEXT PRIMARY KEY,
+      email TEXT,                     -- ★追加（既存DB向けに下でもALTERする）
       name TEXT NOT NULL,
       q1 BOOLEAN NOT NULL,
       q2 BOOLEAN NOT NULL,
@@ -46,6 +48,17 @@ async function initDb() {
       q5_short TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+  `);
+
+  // 既存DBに対しても安全にemailを追加
+  await pool.query(`ALTER TABLE responses ADD COLUMN IF NOT EXISTS email TEXT;`);
+
+  // email の一意性（NULLは複数許容）
+  // ※ IF NOT EXISTS は pg の UNIQUE INDEX に対応
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS responses_email_unique
+    ON responses(email)
+    WHERE email IS NOT NULL;
   `);
 
   await pool.query(`
@@ -106,6 +119,9 @@ function boolize(v) {
 
 function validatePayload(p) {
   const name = String(p.name ?? "").trim();
+  const emailRaw = String(p.email ?? "").trim();              // ★追加
+  const email = emailRaw ? emailRaw.toLowerCase() : "";       // ★追加（同一判定を安定化）
+
   const q1 = boolize(p.q1);
   const q2 = boolize(p.q2);
   const q3 = boolize(p.q3);
@@ -113,11 +129,18 @@ function validatePayload(p) {
   const q5 = String(p.q5 ?? "").trim();
 
   if (!name) return { ok: false, error: "名前（ニックネーム）を入力してください。" };
+
+  // ★追加：email必須（同一人物判定のキー）
+  if (!email) return { ok: false, error: "メールアドレスを入力してください。" };
+  // 厳密すぎない最低限の形式チェック
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return { ok: false, error: "メールアドレスの形式が正しくありません。" };
+
   if ([q1, q2, q3, q4].some((v) => v === null))
     return { ok: false, error: "Q1〜Q4はYes/Noで回答してください。" };
   if (!q5) return { ok: false, error: "Q5（自慢）を入力してください。" };
 
-  return { ok: true, value: { name, q1, q2, q3, q4, q5 } };
+  return { ok: true, value: { name, email, q1, q2, q3, q4, q5 } }; // ★emailを含める
 }
 
 function summarizeFallback(text, maxLen = 5) {
@@ -219,21 +242,34 @@ async function setPublished(published) {
 
 async function loadResponses() {
   const { rows } = await pool.query(
-    `SELECT id, name, q1, q2, q3, q4, q5, q5_short, created_at
+    `SELECT id, email, name, q1, q2, q3, q4, q5, q5_short, created_at
      FROM responses
      ORDER BY created_at ASC`
   );
   return rows;
 }
 
-async function insertResponse(record) {
-  await pool.query(
+// ★変更：email基準で UPSERT（同一メールは同一人物として更新）
+async function upsertResponseByEmail(record) {
+  const { rows } = await pool.query(
     `
-    INSERT INTO responses(id, name, q1, q2, q3, q4, q5, q5_short, created_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    INSERT INTO responses(id, email, name, q1, q2, q3, q4, q5, q5_short, created_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    ON CONFLICT (email) DO UPDATE
+      SET
+        name = EXCLUDED.name,
+        q1 = EXCLUDED.q1,
+        q2 = EXCLUDED.q2,
+        q3 = EXCLUDED.q3,
+        q4 = EXCLUDED.q4,
+        q5 = EXCLUDED.q5,
+        q5_short = EXCLUDED.q5_short,
+        created_at = EXCLUDED.created_at
+    RETURNING id
     `,
     [
       record.id,
+      record.email,
       record.name,
       record.q1,
       record.q2,
@@ -244,6 +280,7 @@ async function insertResponse(record) {
       record.created_at,
     ]
   );
+  return rows?.[0]?.id;
 }
 
 async function resetResponses() {
@@ -385,7 +422,12 @@ function buildTables(rows) {
     if (b.type === "triad") {
       tables.push({
         tableNo,
-        seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), seat(b, 2, "左下"), { pos: "右下", empty: true }],
+        seats: [
+          seat(b, 0, "左上"),
+          seat(b, 1, "右上"),
+          seat(b, 2, "左下"),
+          { pos: "右下", empty: true },
+        ],
       });
       tableNo++;
       i++;
@@ -397,7 +439,12 @@ function buildTables(rows) {
     if (next && next.type === "pair") {
       tables.push({
         tableNo,
-        seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), seat(next, 0, "左下"), seat(next, 1, "右下")],
+        seats: [
+          seat(b, 0, "左上"),
+          seat(b, 1, "右上"),
+          seat(next, 0, "左下"),
+          seat(next, 1, "右下"),
+        ],
       });
       tableNo++;
       i += 2;
@@ -407,7 +454,12 @@ function buildTables(rows) {
     // pairのみ残った場合（片側空席）
     tables.push({
       tableNo,
-      seats: [seat(b, 0, "左上"), seat(b, 1, "右上"), { pos: "左下", empty: true }, { pos: "右下", empty: true }],
+      seats: [
+        seat(b, 0, "左上"),
+        seat(b, 1, "右上"),
+        { pos: "左下", empty: true },
+        { pos: "右下", empty: true },
+      ],
     });
     tableNo++;
     i++;
@@ -445,21 +497,24 @@ app.get("/api/responses", async (req, res) => {
 });
 
 // 回答登録（参加者）
+// ★変更：email基準 UPSERT
 app.post("/api/responses", async (req, res) => {
   const v = validatePayload(req.body);
   if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
 
   const now = new Date().toISOString();
-  const q5_short = await summarizeByAI(v.value.q5, 5);
+  const q5_short = summarizeFallback(v.value.q5, 5);
 
   const record = {
-    id: cryptoRandomId(),
+    id: cryptoRandomId(),  // INSERT時のみ使用。更新時は既存idが返る
     created_at: now,
     q5_short,
-    ...v.value,
+    ...v.value,            // name, email, q1..q5
   };
 
-  await insertResponse(record);
+  const id = await upsertResponseByEmail(record);
+  record.id = id || record.id;
+
   res.json({ ok: true, record });
 });
 
@@ -559,7 +614,9 @@ app.get("/api/myseat", async (req, res) => {
   }
 
   const table = tables.find((t) => t.tableNo === tableNo);
-  const mySeat = table.seats.find((s) => !s.empty && String(s.id) === String(targetId));
+  const mySeat = table.seats.find(
+    (s) => !s.empty && String(s.id) === String(targetId)
+  );
 
   res.json({
     ok: true,
