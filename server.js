@@ -50,6 +50,12 @@ async function initDb() {
     );
   `);
 
+await pool.query(`
+  CREATE UNIQUE INDEX IF NOT EXISTS responses_email_unique
+  ON responses(email);
+`);
+
+
   // 参加者マスタ（未入力者含む）
   await pool.query(`
     CREATE TABLE IF NOT EXISTS participants (
@@ -265,12 +271,12 @@ async function upsertParticipant({ email, name }) {
 async function upsertSeatOverride({ email, tableNo, pos }) {
   await pool.query(
     `
-    INSERT INTO seat_overrides(email, table_no, pos, updated_at)
+    INSERT INTO manual_seats(email, table_no, pos, created_at)
     VALUES ($1, $2, $3, now())
     ON CONFLICT (email) DO UPDATE
       SET table_no = EXCLUDED.table_no,
           pos = EXCLUDED.pos,
-          updated_at = now()
+          created_at = now()
     `,
     [String(email).toLowerCase(), Number(tableNo), String(pos)]
   );
