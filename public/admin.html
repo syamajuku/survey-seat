@@ -84,6 +84,32 @@
   <option>右下</option>
 </select>
 <button onclick="addManualSeat()">配置</button>
+<hr />
+
+<section id="unresponded-panel" style="padding:12px; border:1px solid #ddd; border-radius:8px; margin-top:12px;">
+  <h3 style="margin:0 0 8px 0;">未入力者（未回答者）一覧</h3>
+
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+    <input id="unresponded-filter" type="text" placeholder="検索（名前 / email）" style="padding:6px; min-width:240px;" />
+    <button id="unresponded-reload">再読込</button>
+    <span id="unresponded-status" style="color:#666;"></span>
+  </div>
+
+  <div style="overflow:auto;">
+    <table style="border-collapse:collapse; width:100%; min-width:720px;">
+      <thead>
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">名前</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">email</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">現在の手動席</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">配置</th>
+          <th style="text-align:left; border-bottom:1px solid #ddd; padding:6px;">解除</th>
+        </tr>
+      </thead>
+      <tbody id="unresponded-tbody"></tbody>
+    </table>
+  </div>
+</section>
 
     /* ===== 回答一覧 ===== */
     .table-wrap{
@@ -401,5 +427,135 @@ async function resetAll(){
   setPill(false);
 }
 </script>
+<script>
+  async function apiJson(url, options) {
+    const res = await fetch(url, options || {});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      const msg = data.error || ("HTTP " + res.status);
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function loadUnrespondedAndRender() {
+    const statusEl = document.getElementById("unresponded-status");
+    const tbody = document.getElementById("unresponded-tbody");
+    const filter = (document.getElementById("unresponded-filter")?.value ?? "").trim().toLowerCase();
+
+    statusEl.textContent = "読み込み中…";
+    tbody.innerHTML = "";
+
+    const data = await apiJson("/api/unresponded");
+    let rows = data.rows || [];
+
+    if (filter) {
+      rows = rows.filter(r =>
+        String(r.name ?? "").toLowerCase().includes(filter) ||
+        String(r.email ?? "").toLowerCase().includes(filter)
+      );
+    }
+
+    for (const r of rows) {
+      const name = String(r.name ?? "").trim();
+      const email = String(r.email ?? "").trim().toLowerCase();
+      const currentSeat = (r.table_no && r.pos) ? `T${r.table_no} / ${r.pos}` : "—";
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(name)}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(email)}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(currentSeat)}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px; white-space:nowrap;">
+          <button data-act="assign" data-pos="左上" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">左上</button>
+          <button data-act="assign" data-pos="右上" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">右上</button>
+          <button data-act="assign" data-pos="左下" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">左下</button>
+          <button data-act="assign" data-pos="右下" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">右下</button>
+        </td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">
+          <button data-act="clear" data-email="${escapeHtml(email)}">解除</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    statusEl.textContent = `件数: ${rows.length}`;
+  }
+
+  async function assignManualSeat(email, name, pos) {
+    const tableNoStr = prompt("配置するテーブル番号（数字）", "1");
+    if (!tableNoStr) return;
+    const tableNo = Number(tableNoStr);
+    if (!Number.isFinite(tableNo) || tableNo <= 0) {
+      alert("テーブル番号が不正です");
+      return;
+    }
+
+    await apiJson("/api/manual-seat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name, tableNo, pos })
+    });
+
+    // 既存の座席表描画の仕組みに依存しないため、確実に反映させる
+    location.reload();
+  }
+
+  async function clearManualSeat(email) {
+    if (!confirm(`${email} の手動席を解除しますか？`)) return;
+
+    await apiJson(`/api/manual-seat?email=${encodeURIComponent(email)}`, {
+      method: "DELETE"
+    });
+
+    location.reload();
+  }
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const act = btn.getAttribute("data-act");
+    if (!act) return;
+
+    try {
+      if (act === "assign") {
+        const email = btn.getAttribute("data-email");
+        const name = btn.getAttribute("data-name");
+        const pos = btn.getAttribute("data-pos");
+        await assignManualSeat(email, name, pos);
+      }
+      if (act === "clear") {
+        const email = btn.getAttribute("data-email");
+        await clearManualSeat(email);
+      }
+    } catch (err) {
+      alert(err.message || String(err));
+    }
+  });
+
+  document.getElementById("unresponded-reload")?.addEventListener("click", () => {
+    loadUnrespondedAndRender().catch(err => alert(err.message || String(err)));
+  });
+  document.getElementById("unresponded-filter")?.addEventListener("input", () => {
+    loadUnrespondedAndRender().catch(() => {});
+  });
+
+  // 初回描画
+  loadUnrespondedAndRender().catch(err => {
+    const statusEl = document.getElementById("unresponded-status");
+    if (statusEl) statusEl.textContent = "読み込み失敗: " + (err.message || String(err));
+  });
+</script>
+
 </body>
 </html>

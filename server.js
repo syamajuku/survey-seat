@@ -247,6 +247,32 @@ async function loadParticipants() {
   );
   return rows;
 }
+async function loadUnresponded() {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      p.email,
+      p.name,
+      p.created_at,
+      ms.table_no,
+      ms.pos
+    FROM participants p
+    LEFT JOIN responses r
+      ON r.email = p.email
+    LEFT JOIN manual_seats ms
+      ON ms.email = p.email
+    WHERE r.email IS NULL
+    ORDER BY p.created_at ASC
+    `
+  );
+  return rows;
+}
+
+async function deleteSeatOverrideByEmail(email) {
+  await pool.query(`DELETE FROM manual_seats WHERE email = $1`, [
+    String(email).toLowerCase(),
+  ]);
+}
 
 async function loadSeatOverrides() {
   const { rows } = await pool.query(
@@ -591,6 +617,25 @@ app.post("/api/manual-seat", async (req, res) => {
 
   res.json({ ok:true });
 });
+
+// 未回答者一覧（運営）
+app.get("/api/unresponded", async (req, res) => {
+  const rows = await loadUnresponded();
+  res.json({ ok: true, count: rows.length, rows });
+});
+
+// 手動席の解除（運営）
+app.delete("/api/manual-seat", async (req, res) => {
+  const email = String(req.query?.email ?? "").trim().toLowerCase();
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: "email is invalid" });
+  }
+
+  await deleteSeatOverrideByEmail(email);
+  res.json({ ok: true });
+});
+
 
 // 座席割り当て（運営）
 app.get("/api/assignments", async (req, res) => {
