@@ -601,6 +601,29 @@ app.post("/api/participant", async (req, res) => {
   res.json({ ok: true, email });
 });
 
+// 未入力者（participants）を削除（回答済みは削除不可）
+app.delete("/api/participant", async (req, res) => {
+  const email = String(req.query?.email ?? "").trim().toLowerCase();
+  if (!email) return res.status(400).json({ ok: false, error: "email is required" });
+
+  // 回答済みなら削除禁止
+  const r1 = await pool.query(`SELECT 1 FROM responses WHERE email = $1 LIMIT 1`, [email]);
+  if (r1.rowCount > 0) {
+    return res.status(400).json({ ok: false, error: "回答済みのため削除できません" });
+  }
+
+  // 手動席があれば消す（存在しなくてもOK）
+  await pool.query(`DELETE FROM manual_seats WHERE email = $1`, [email]);
+
+  // participants を削除
+  const r2 = await pool.query(`DELETE FROM participants WHERE email = $1`, [email]);
+
+  if (r2.rowCount === 0) {
+    return res.status(404).json({ ok: false, error: "not found" });
+  }
+
+  res.json({ ok: true });
+});
 
 // 回答登録（参加者）
 // ★変更：email基準 UPSERT

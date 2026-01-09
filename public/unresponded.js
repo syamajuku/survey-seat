@@ -58,6 +58,9 @@
           <button data-act="assign" data-pos="左下" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">左下</button>
           <button data-act="assign" data-pos="右下" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">右下</button>
         </td>
+<td style="border-bottom:1px solid #eee; padding:6px;">
+  <button data-act="delete" data-email="${escapeHtml(email)}">削除</button>
+</td>
         <td style="border-bottom:1px solid #eee; padding:6px;">
           <button data-act="clear" data-email="${escapeHtml(email)}">解除</button>
         </td>
@@ -111,6 +114,21 @@
           btn.getAttribute("data-name"),
           btn.getAttribute("data-pos")
         );
+} else if (act === "delete") {
+  const email = btn.getAttribute("data-email");
+  if (!confirm(`${email} を名簿から削除しますか？（元に戻せません）`)) return;
+
+  await apiJson(`/api/participant?email=${encodeURIComponent(email)}`, {
+    method: "DELETE",
+  });
+
+  // 一覧だけ更新（全部リロードでもOK）
+  if (typeof loadUnrespondedAndRender === "function") {
+    loadUnrespondedAndRender();
+  } else {
+    location.reload();
+  }
+}
       } else if (act === "clear") {
         await clearManualSeat(btn.getAttribute("data-email"));
       }
