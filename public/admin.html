@@ -74,6 +74,17 @@
     .seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
     .q5{font-size:12px; font-weight:700; opacity:.85; margin-top:2px;}
 
+<h3>未入力者を手動配置</h3>
+<input id="manualName" placeholder="名前">
+<select id="manualTable">…</select>
+<select id="manualPos">
+  <option>左上</option>
+  <option>右上</option>
+  <option>左下</option>
+  <option>右下</option>
+</select>
+<button onclick="addManualSeat()">配置</button>
+
     /* ===== 回答一覧 ===== */
     .table-wrap{
       overflow-x:auto; background:#fff; border:1px solid #e5e7eb;

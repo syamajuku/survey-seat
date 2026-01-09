@@ -75,6 +75,25 @@ async function initDb() {
     );
   `);
 
+  // ★未回答者も含む参加者名簿
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS participants (
+      email TEXT PRIMARY KEY,
+      name  TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  // ★管理者による手動座席指定
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS seat_overrides (
+      email TEXT PRIMARY KEY,
+      table_no INTEGER NOT NULL,
+      pos TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // published が未設定なら false で作る
   await pool.query(`
     INSERT INTO state(key, value)
@@ -238,6 +257,48 @@ async function setPublished(published) {
     [published ? "true" : "false"]
   );
   return { published };
+}
+async function loadParticipants() {
+  const { rows } = await pool.query(
+    `SELECT email, name, created_at
+     FROM participants
+     ORDER BY created_at ASC`
+  );
+  return rows;
+}
+
+async function loadSeatOverrides() {
+  const { rows } = await pool.query(
+    `SELECT email, table_no, pos
+     FROM seat_overrides`
+  );
+  return rows;
+}
+
+async function upsertParticipant({ email, name }) {
+  await pool.query(
+    `
+    INSERT INTO participants(email, name)
+    VALUES ($1, $2)
+    ON CONFLICT (email) DO UPDATE
+      SET name = EXCLUDED.name
+    `,
+    [String(email).toLowerCase(), String(name).trim()]
+  );
+}
+
+async function upsertSeatOverride({ email, tableNo, pos }) {
+  await pool.query(
+    `
+    INSERT INTO seat_overrides(email, table_no, pos, updated_at)
+    VALUES ($1, $2, $3, now())
+    ON CONFLICT (email) DO UPDATE
+      SET table_no = EXCLUDED.table_no,
+          pos = EXCLUDED.pos,
+          updated_at = now()
+    `,
+    [String(email).toLowerCase(), Number(tableNo), String(pos)]
+  );
 }
 
 async function loadResponses() {
@@ -527,43 +588,75 @@ app.post("/api/q5short", async (req, res) => {
   await updateQ5Short(id, q5_short);
   res.json({ ok: true });
 });
+app.post("/api/manual-seat", async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const name  = String(req.body?.name ?? "").trim();
+  const tableNo = Number(req.body?.tableNo);
+  const pos = String(req.body?.pos ?? "").trim(); // "左上" "右上" "左下" "右下"
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok:false, error:"email is invalid" });
+  }
+  if (!name) return res.status(400).json({ ok:false, error:"name is required" });
+  if (!Number.isFinite(tableNo) || tableNo <= 0) {
+    return res.status(400).json({ ok:false, error:"tableNo is invalid" });
+  }
+  if (!["左上","右上","左下","右下"].includes(pos)) {
+    return res.status(400).json({ ok:false, error:"pos is invalid" });
+  }
+
+  await upsertParticipant({ email, name });
+  await upsertSeatOverride({ email, tableNo, pos });
+
+  res.json({ ok:true });
+});
 
 // 座席割り当て（運営）
 app.get("/api/assignments", async (req, res) => {
-  const rows = await loadResponses();
-  const { blocks, tables } = buildTables(rows);
+  const responses = await loadResponses();        // 回答者
+  const participants = await loadParticipants();  // 未回答含む名簿
+  const overrides = await loadSeatOverrides();    // 手動座席
 
-  // CSV向け（任意）
-  const seatRows = [];
-  let seatIndex = 1;
+  // ① まず回答者だけで自動割当
+  const auto = buildTables(responses);
+
+  // tables を編集可能にコピー
+  const tables = JSON.parse(JSON.stringify(auto.tables));
+  const tableMap = new Map(tables.map(t => [t.tableNo, t]));
+
+  // ② 手動座席を上書き
+  for (const o of overrides) {
+    const email = String(o.email).toLowerCase();
+    const p = participants.find(x => x.email === email);
+    const r = responses.find(x => x.email === email);
+
+    const t = tableMap.get(Number(o.table_no));
+    if (!t) continue;
+
+    const s = t.seats.find(x => x.pos === o.pos);
+    if (!s) continue;
+
+    s.empty = false;
+    s.id = r?.id ?? `manual:${email}`;
+    s.name = p?.name ?? r?.name ?? email;
+    s.q5 = r?.q5_short ?? (r?.q5 ? summarizeFallback(r.q5, 5) : "未回答");
+    s.blockType = "manual";
+  }
+
+  // ③ idToTable を再構築
+  const idToTable = new Map();
   for (const t of tables) {
     for (const s of t.seats) {
-      if (s.empty) {
-        seatRows.push({
-          seat: seatIndex++,
-          tableNo: t.tableNo,
-          pos: s.pos,
-          empty: true,
-        });
-      } else {
-        const m = rows.find((r) => String(r.id) === String(s.id));
-        seatRows.push({
-          seat: seatIndex++,
-          tableNo: t.tableNo,
-          pos: s.pos,
-          name: s.name,
-          q1: m?.q1 ? "Yes" : "No",
-          q2: m?.q2 ? "Yes" : "No",
-          q3: m?.q3 ? "Yes" : "No",
-          q4: m?.q4 ? "Yes" : "No",
-          q5: m?.q5 ?? "",
-          q5_short: m?.q5_short ?? summarizeFallback(m?.q5 ?? "", 5),
-        });
-      }
+      if (!s.empty) idToTable.set(String(s.id), t.tableNo);
     }
   }
 
-  res.json({ ok: true, count: rows.length, blocks, tables, seatRows });
+  res.json({
+    ok: true,
+    count: responses.length,
+    blocks: auto.blocks,
+    tables,
+  });
 });
 
 // 座席公開（運営）
@@ -628,6 +721,21 @@ app.get("/api/myseat", async (req, res) => {
     resolvedId: targetId,
   });
 });
+
+// 未入力者の座席配置
+app.post("/api/manual-seat", async (req, res) => {
+  const { name, tableNo, pos } = req.body;
+
+  await pool.query(`
+    INSERT INTO responses
+      (id, name, q1, q2, q3, q4, q5, manual, manual_table, manual_pos)
+    VALUES
+      ($1, $2, false, false, false, false, '', true, $3, $4)
+  `, [cryptoRandomId(), name, tableNo, pos]);
+
+  res.json({ ok: true });
+});
+
 
 // 全回答リセット（運営）
 app.post("/api/reset", async (req, res) => {
