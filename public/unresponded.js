@@ -34,11 +34,9 @@
     let rows = data.rows || [];
 
     if (filter) {
-      rows = rows.filter(
-        (r) =>
-          String(r.name ?? "").toLowerCase().includes(filter) ||
-          String(r.email ?? "").toLowerCase().includes(filter)
-      );
+rows = rows.filter((r) =>
+  String(r.name ?? "").toLowerCase().includes(filter)
+);
     }
 
     for (const r of rows) {
@@ -50,7 +48,6 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(name)}</td>
-        <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(email)}</td>
         <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(currentSeat)}</td>
         <td style="border-bottom:1px solid #eee; padding:6px; white-space:nowrap;">
           <button data-act="assign" data-pos="左上" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">左上</button>
@@ -138,21 +135,6 @@ document.addEventListener("click", async (e) => {
     alert(err?.message || String(err));
   }
 });
-
-  // 一覧だけ更新（全部リロードでもOK）
-  if (typeof loadUnrespondedAndRender === "function") {
-    loadUnrespondedAndRender();
-  } else {
-    location.reload();
-  }
-}
-      } else if (act === "clear") {
-        await clearManualSeat(btn.getAttribute("data-email"));
-      }
-    } catch (err) {
-      alert(err?.message || String(err));
-    }
-  });
 
   document.getElementById("unresponded-reload")?.addEventListener("click", () => {
     loadUnrespondedAndRender().catch((err) => alert(err.message || String(err)));
