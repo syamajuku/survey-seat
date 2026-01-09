@@ -34,65 +34,41 @@ const pool = new Pool({
 });
 
 async function initDb() {
-  // 初回起動でも自動でテーブルが揃う（手動SQL不要）
+  // 回答テーブル（既存）
   await pool.query(`
     CREATE TABLE IF NOT EXISTS responses (
       id TEXT PRIMARY KEY,
-      email TEXT,                     -- ★追加（既存DB向けに下でもALTERする）
       name TEXT NOT NULL,
+      email TEXT NOT NULL,
       q1 BOOLEAN NOT NULL,
       q2 BOOLEAN NOT NULL,
       q3 BOOLEAN NOT NULL,
       q4 BOOLEAN NOT NULL,
       q5 TEXT NOT NULL,
       q5_short TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
-  // 既存DBに対しても安全にemailを追加
-  await pool.query(`ALTER TABLE responses ADD COLUMN IF NOT EXISTS email TEXT;`);
-
-  // email の一意性（NULLは複数許容）
-  // ※ IF NOT EXISTS は pg の UNIQUE INDEX に対応
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS responses_email_unique
-    ON responses(email)
-    WHERE email IS NOT NULL;
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS questions (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS state (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  // ★未回答者も含む参加者名簿
+  // 参加者マスタ（未入力者含む）
   await pool.query(`
     CREATE TABLE IF NOT EXISTS participants (
       email TEXT PRIMARY KEY,
-      name  TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
-  // ★管理者による手動座席指定
+  // 管理者による手動座席指定
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS seat_overrides (
+    CREATE TABLE IF NOT EXISTS manual_seats (
       email TEXT PRIMARY KEY,
       table_no INTEGER NOT NULL,
       pos TEXT NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+}
 
   // published が未設定なら false で作る
   await pool.query(`
