@@ -128,14 +128,12 @@
 
 document.getElementById("add-participant-btn")?.addEventListener("click", async () => {
   const nameEl = document.getElementById("new-participant-name");
-  const emailEl = document.getElementById("new-participant-email");
   const statusEl = document.getElementById("add-participant-status");
 
   const name = (nameEl?.value ?? "").trim();
-  const email = (emailEl?.value ?? "").trim().toLowerCase();
 
-  if (!name || !email) {
-    alert("名前とemailを入力してください");
+  if (!name) {
+    alert("名前を入力してください");
     return;
   }
 
@@ -145,19 +143,18 @@ document.getElementById("add-participant-btn")?.addEventListener("click", async 
     const res = await fetch("/api/participant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name })   // ← email は送らない
     });
-    const data = await res.json();
 
+    const data = await res.json();
     if (!res.ok || data.ok === false) {
       throw new Error(data.error || "登録に失敗しました");
     }
 
     nameEl.value = "";
-    emailEl.value = "";
     statusEl.textContent = "登録しました";
 
-    // 未入力者一覧を更新
+    // 未入力者一覧を再読込
     if (typeof loadUnrespondedAndRender === "function") {
       loadUnrespondedAndRender();
     } else {
