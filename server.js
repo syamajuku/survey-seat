@@ -68,7 +68,6 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
-}
 
   // published が未設定なら false で作る
   await pool.query(`
@@ -246,7 +245,7 @@ async function loadParticipants() {
 async function loadSeatOverrides() {
   const { rows } = await pool.query(
     `SELECT email, table_no, pos
-     FROM seat_overrides`
+     FROM manual_seats`
   );
   return rows;
 }
@@ -697,21 +696,6 @@ app.get("/api/myseat", async (req, res) => {
     resolvedId: targetId,
   });
 });
-
-// 未入力者の座席配置
-app.post("/api/manual-seat", async (req, res) => {
-  const { name, tableNo, pos } = req.body;
-
-  await pool.query(`
-    INSERT INTO responses
-      (id, name, q1, q2, q3, q4, q5, manual, manual_table, manual_pos)
-    VALUES
-      ($1, $2, false, false, false, false, '', true, $3, $4)
-  `, [cryptoRandomId(), name, tableNo, pos]);
-
-  res.json({ ok: true });
-});
-
 
 // 全回答リセット（運営）
 app.post("/api/reset", async (req, res) => {
