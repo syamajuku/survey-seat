@@ -126,6 +126,50 @@
     loadUnrespondedAndRender().catch(() => {});
   });
 
+document.getElementById("add-participant-btn")?.addEventListener("click", async () => {
+  const nameEl = document.getElementById("new-participant-name");
+  const emailEl = document.getElementById("new-participant-email");
+  const statusEl = document.getElementById("add-participant-status");
+
+  const name = (nameEl?.value ?? "").trim();
+  const email = (emailEl?.value ?? "").trim().toLowerCase();
+
+  if (!name || !email) {
+    alert("名前とemailを入力してください");
+    return;
+  }
+
+  try {
+    statusEl.textContent = "登録中…";
+
+    const res = await fetch("/api/participant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || "登録に失敗しました");
+    }
+
+    nameEl.value = "";
+    emailEl.value = "";
+    statusEl.textContent = "登録しました";
+
+    // 未入力者一覧を更新
+    if (typeof loadUnrespondedAndRender === "function") {
+      loadUnrespondedAndRender();
+    } else {
+      location.reload();
+    }
+  } catch (err) {
+    alert(err.message || String(err));
+    statusEl.textContent = "";
+  }
+});
+
+
   loadUnrespondedAndRender().catch((err) => {
     const statusEl = document.getElementById("unresponded-status");
     if (statusEl) statusEl.textContent = "読み込み失敗: " + (err.message || String(err));

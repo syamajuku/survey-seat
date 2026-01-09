@@ -268,6 +268,19 @@ async function loadUnresponded() {
   return rows;
 }
 
+async function upsertParticipantOnly({ email, name }) {
+  await pool.query(
+    `
+    INSERT INTO participants (email, name, created_at)
+    VALUES ($1, $2, now())
+    ON CONFLICT (email) DO UPDATE
+      SET name = EXCLUDED.name
+    `,
+    [String(email).toLowerCase(), String(name)]
+  );
+}
+
+
 async function deleteSeatOverrideByEmail(email) {
   await pool.query(`DELETE FROM manual_seats WHERE email = $1`, [
     String(email).toLowerCase(),
@@ -563,6 +576,23 @@ app.get("/api/responses", async (req, res) => {
   const rows = await loadResponses();
   res.json({ ok: true, count: rows.length, rows });
 });
+
+// 名簿だけ登録（未入力者）
+app.post("/api/participant", async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const name = String(req.body?.name ?? "").trim();
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: "email is invalid" });
+  }
+  if (!name) {
+    return res.status(400).json({ ok: false, error: "name is required" });
+  }
+
+  await upsertParticipantOnly({ email, name });
+  res.json({ ok: true });
+});
+
 
 // 回答登録（参加者）
 // ★変更：email基準 UPSERT

@@ -180,6 +180,18 @@
 
   <div id="seatResult"></div>
 <hr />
+<section style="margin:12px 0; padding:12px; border:1px dashed #bbb; border-radius:8px;">
+  <h3 style="margin:0 0 8px 0;">未入力者を手動登録</h3>
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <input id="new-participant-name" type="text" placeholder="名前"
+           style="padding:6px; min-width:180px;" />
+    <input id="new-participant-email" type="email" placeholder="email"
+           style="padding:6px; min-width:240px;" />
+    <button id="add-participant-btn">名簿に追加</button>
+    <span id="add-participant-status" style="color:#666;"></span>
+  </div>
+</section>
 
 <section id="unresponded-panel" style="padding:12px; border:1px solid #ddd; border-radius:8px; margin-top:12px;">
   <h3 style="margin:0 0 8px 0;">未入力者（未回答者）一覧</h3>
