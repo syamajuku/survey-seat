@@ -100,27 +100,44 @@
     location.reload();
   }
 
-  document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
 
-    const act = btn.getAttribute("data-act");
-    if (!act) return;
+  const act = btn.getAttribute("data-act");
+  if (!act) return;
 
-    try {
-      if (act === "assign") {
-        await assignManualSeat(
-          btn.getAttribute("data-email"),
-          btn.getAttribute("data-name"),
-          btn.getAttribute("data-pos")
-        );
-} else if (act === "delete") {
-  const email = btn.getAttribute("data-email");
-  if (!confirm(`${email} を名簿から削除しますか？（元に戻せません）`)) return;
+  try {
+    if (act === "assign") {
+      await assignManualSeat(
+        btn.getAttribute("data-email"),
+        btn.getAttribute("data-name"),
+        btn.getAttribute("data-pos")
+      );
+      return;
+    }
 
-  await apiJson(`/api/participant?email=${encodeURIComponent(email)}`, {
-    method: "DELETE",
-  });
+    if (act === "delete") {
+      const email = btn.getAttribute("data-email");
+      if (!confirm(`${email} を名簿から削除しますか？（元に戻せません）`)) return;
+
+      await apiJson(`/api/participant?email=${encodeURIComponent(email)}`, {
+        method: "DELETE",
+      });
+
+      // 一覧だけ更新
+      await loadUnrespondedAndRender();
+      return;
+    }
+
+    if (act === "clear") {
+      await clearManualSeat(btn.getAttribute("data-email"));
+      return;
+    }
+  } catch (err) {
+    alert(err?.message || String(err));
+  }
+});
 
   // 一覧だけ更新（全部リロードでもOK）
   if (typeof loadUnrespondedAndRender === "function") {
