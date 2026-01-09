@@ -11,6 +11,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import pkg from "pg";
 import OpenAI from "openai";
+import crypto from "crypto";
+
 
 const { Pool } = pkg;
 
@@ -579,18 +581,24 @@ app.get("/api/responses", async (req, res) => {
 
 // 名簿だけ登録（未入力者）
 app.post("/api/participant", async (req, res) => {
-  const email = String(req.body?.email ?? "").trim().toLowerCase();
   const name = String(req.body?.name ?? "").trim();
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ ok: false, error: "email is invalid" });
-  }
   if (!name) {
     return res.status(400).json({ ok: false, error: "name is required" });
   }
 
-  await upsertParticipantOnly({ email, name });
-  res.json({ ok: true });
+  // email を自動生成（内部ID用途）
+  const email = `manual-${crypto.randomUUID()}@local`;
+
+  await pool.query(
+    `
+    INSERT INTO participants (email, name, created_at)
+    VALUES ($1, $2, now())
+    `,
+    [email, name]
+  );
+
+  res.json({ ok: true, email });
 });
 
 
