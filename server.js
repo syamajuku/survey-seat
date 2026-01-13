@@ -49,7 +49,7 @@ async function initDb() {
       q5 TEXT NOT NULL,
       q5_short TEXT,
       created_at TIMESTAMPTZ DEFAULT now(),
-      is_absent BOOLEAN NOT NULL DEFAULT false,
+      is_absent BOOLEAN NOT NULL DEFAULT false
     );
   `);
 
