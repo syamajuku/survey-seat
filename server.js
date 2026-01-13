@@ -629,18 +629,22 @@ app.delete("/api/participant", async (req, res) => {
 // 回答登録（参加者）
 // ★変更：email基準 UPSERT
 app.post("/api/responses", async (req, res) => {
+  // ★追加：公開後は回答を受け付けない
+  const st = await readState();
+  if (st.published) {
+    return res.status(403).json({
+      ok: false,
+      error: "座席が公開されたため、回答の入力はできません。",
+    });
+  }
+
   const v = validatePayload(req.body);
   if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
 
   const now = new Date().toISOString();
   const q5_short = summarizeFallback(v.value.q5, 5);
 
-  const record = {
-    id: cryptoRandomId(),  // INSERT時のみ使用。更新時は既存idが返る
-    created_at: now,
-    q5_short,
-    ...v.value,            // name, email, q1..q5
-  };
+  const record = { ... };
 
   const id = await upsertResponseByEmail(record);
   record.id = id || record.id;

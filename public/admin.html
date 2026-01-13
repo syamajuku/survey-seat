@@ -89,7 +89,9 @@
     th,td{border:1px solid #ddd; padding:8px 6px; font-size:13px; text-align:center; white-space:nowrap;}
     th{background:#f3f4f6; font-weight:900;}
     td.name{text-align:left; font-weight:900;}
+
     td.edit{min-width:160px;}
+
     .editbox{
       width:140px; padding:6px 8px; border:1px solid #d1d5db; border-radius:8px;
       font-size:13px;
@@ -98,6 +100,12 @@
       padding:6px 10px; border-radius:8px; font-weight:900; cursor:pointer; border:none;
       margin-left:6px;
     }
+
+/* 回答一覧：Q5（原文）を左寄せ */
+#answerTable td.q5-original{
+  text-align: left;
+  white-space: normal;     /* 長文は折り返し可（必要なら） */
+}
 .absent-row { opacity: .55; }
 .absent-row td.name { text-decoration: line-through; }
 .absent-badge {
@@ -433,7 +441,7 @@ function renderAnswers(rows){
         <button class="mini-btn btn-secondary" onclick="saveQ5Short('${id}')">保存</button>
       </td>
 
-      <td>${original}</td>
+      <td class="q5-original">${original}</td>
       <td>${esc(r.created_at || "")}</td>
 
       <td>
