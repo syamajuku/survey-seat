@@ -124,6 +124,17 @@
 <body>
   <div class="wrap">
     <h1>座席最適化AI</h1>
+<!-- 公開後メッセージ（初期は非表示） -->
+<div id="publishedNotice" class="card" style="display:none;">
+  <div style="font-weight:900;">回答の受付は終了しました。</div>
+</div>
+
+<!-- 座席表示（参加者） ※見出し直下に移動 -->
+<div id="seatBox" class="card" style="display:none;">
+  <!-- seatMeta は内部処理用（表示はしない） -->
+  <div id="seatMeta" style="display:none;"></div>
+  <div id="seatResult"></div>
+</div>
 
     <!-- 名前 -->
     <div class="card">
@@ -191,13 +202,6 @@
       </div>
 
       <div id="msg" class="msg"></div>
-    </div>
-
-    <!-- 座席表示（参加者） -->
-    <div id="seatBox" class="card" style="display:none;">
-      <!-- seatMeta は内部処理用（表示はしない） -->
-      <div id="seatMeta" style="display:none;"></div>
-      <div id="seatResult"></div>
     </div>
 
   </div>
@@ -325,9 +329,18 @@ async function submitForm(){
         }
       }catch(e){
         showMsg("送信に失敗しました。", false);
-      }finally{
-        btn.disabled = false;
-      }
+} finally {
+  // ★公開後は送信ボタンを再度有効化しない
+  try {
+    const st = await fetch("/api/publish", { cache: "no-store" }).then(r => r.json());
+    if (!(st && st.ok && st.published)) {
+      btn.disabled = false;
+    }
+  } catch {
+    // publish 状態が取れない場合のみ戻す（安全側）
+    btn.disabled = false;
+  }
+}
     }
 
 async function checkSeat(){
@@ -372,7 +385,10 @@ async function checkSeat(){
         const s = seatByPos.get(pos);
         if(!s || s.empty) return `<div class="seat empty">空席</div>`;
 
-        const clsBase = (s.blockType === "triad") ? "seat solo" : "seat pair";
+      const clsBase =
+       (s.blockType === "manual") ? "seat manual" :
+       (s.blockType === "triad")  ? "seat triad"  :
+                               "seat pair";
         const clsMe = (id && s.id === id) ? " me" : "";
         const name = escapeHtml(s.name);
         const brag = escapeHtml(s.q5 || "");
@@ -404,14 +420,38 @@ async function checkSeat(){
   }
 }
 
-    // 初期化
-    window.addEventListener("DOMContentLoaded", () => {
-      loadQuestions();
-      checkSeat();
-    });
+window.addEventListener("DOMContentLoaded", () => {
+  loadQuestions();
+  lockIfPublished().catch(()=>{});
+  checkSeat();
+});
 
     // 5秒おきに座席公開を確認（公開されたら表示される）
     setInterval(checkSeat, 5000);
+
+async function lockIfPublished(){
+  const st = await fetch("/api/publish", { cache:"no-store" }).then(r => r.json());
+  const published = !!st.published;
+
+  if (!published) return;
+
+  // 1) メッセージを表示
+  const notice = document.getElementById("publishedNotice");
+  if (notice) notice.style.display = "block";
+
+  // 2) 送信ボタンだけ押せないようにする（入力欄はそのまま表示）
+  const btn = document.getElementById("submitBtn");
+  if (btn) btn.disabled = true;
+
+  // 3) 公開後は座席表示を出す（checkSeat が中身を描画する）
+  const box = document.getElementById("seatBox");
+  if (box) box.style.display = "block";
+}
+
+window.addEventListener("load", () => {
+  lockIfPublished().catch(()=>{});
+});
+
   </script>
 </body>
 </html>
