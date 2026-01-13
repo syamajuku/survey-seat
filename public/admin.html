@@ -68,9 +68,15 @@
       padding:8px; border-radius:10px; box-sizing:border-box;
       font-weight:900; text-align:center; word-break:break-word;
     }
-    .seat.pair{background:#dbeafe; border:2px solid #3b82f6;}
-    .seat.triad{background:#dcfce7; border:2px solid #16a34a;}
-    .seat.solo{background:#fff7ed; border:2px dashed #f97316;}
+/* 人が座っている席はすべて同じ見た目にする */
+/* ===== 座席カラー統一（青） ===== */
+.seat.pair,
+.seat.triad,
+.seat.solo,
+.seat.manual{
+  background:#DBEAFE;      /* 薄い青 */
+  border:2px solid #2563EB; /* 濃い青 */
+}
     .seat.empty{background:#eee; border:2px dashed #ccc; color:#777;}
     .q5{font-size:12px; font-weight:700; opacity:.85; margin-top:2px;}
 
