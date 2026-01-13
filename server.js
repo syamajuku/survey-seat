@@ -719,7 +719,8 @@ app.get("/api/unresponded", async (req, res) => {
 app.delete("/api/manual-seat", async (req, res) => {
   const email = String(req.query?.email ?? "").trim().toLowerCase();
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // ★変更：厳密すぎないチェック（@があって空白がない程度）
+  if (!email || /\s/.test(email) || !email.includes("@")) {
     return res.status(400).json({ ok: false, error: "email is invalid" });
   }
 
