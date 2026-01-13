@@ -48,6 +48,7 @@ rows = rows.filter((r) =>
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(name)}</td>
+        <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(email)}</td>
         <td style="border-bottom:1px solid #eee; padding:6px;">${escapeHtml(currentSeat)}</td>
         <td style="border-bottom:1px solid #eee; padding:6px; white-space:nowrap;">
           <button data-act="assign" data-pos="左上" data-email="${escapeHtml(email)}" data-name="${escapeHtml(name)}">左上</button>

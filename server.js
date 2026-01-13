@@ -678,14 +678,22 @@ app.post("/api/q5short", async (req, res) => {
   res.json({ ok: true });
 });
 app.post("/api/manual-seat", async (req, res) => {
-  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  let email = String(req.body?.email ?? "").trim().toLowerCase();
   const name  = String(req.body?.name ?? "").trim();
   const tableNo = Number(req.body?.tableNo);
   const pos = String(req.body?.pos ?? "").trim(); // "左上" "右上" "左下" "右下"
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // ★変更：email が無ければ自動生成（手動登録/未入力者向け）
+  if (!email) {
+    email = `manual-${crypto.randomUUID()}@local`;
+  }
+
+  // ★変更：厳密すぎないチェック（@があって空白がない程度）
+  // `manual-xxx@local` も通す
+  if (/\s/.test(email) || !email.includes("@")) {
     return res.status(400).json({ ok:false, error:"email is invalid" });
   }
+
   if (!name) return res.status(400).json({ ok:false, error:"name is required" });
   if (!Number.isFinite(tableNo) || tableNo <= 0) {
     return res.status(400).json({ ok:false, error:"tableNo is invalid" });
@@ -697,7 +705,8 @@ app.post("/api/manual-seat", async (req, res) => {
   await upsertParticipant({ email, name });
   await upsertSeatOverride({ email, tableNo, pos });
 
-  res.json({ ok:true });
+  // ★追加：採用した email を返す（UI側が必要なら保持できる）
+  res.json({ ok:true, email });
 });
 
 // 未回答者一覧（運営）
