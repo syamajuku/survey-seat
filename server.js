@@ -78,6 +78,22 @@ await pool.query(`
     );
   `);
 
+  // 公開状態（published）を保存する state
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
+  // 質問文を保存する questions
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS questions (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
   // published が未設定なら false で作る
   await pool.query(`
     INSERT INTO state(key, value)
@@ -644,7 +660,12 @@ app.post("/api/responses", async (req, res) => {
   const now = new Date().toISOString();
   const q5_short = summarizeFallback(v.value.q5, 5);
 
-  const record = { ... };
+  const record = {
+    id: cryptoRandomId(),  // INSERT時のみ使用。更新時は既存idが返る
+    created_at: now,
+    q5_short,
+    ...v.value,            // name, email, q1..q5
+  };
 
   const id = await upsertResponseByEmail(record);
   record.id = id || record.id;
