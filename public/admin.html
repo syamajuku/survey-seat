@@ -231,6 +231,7 @@
           <th>要約編集</th>
           <th>Q5（原文）</th>
           <th>回答時刻</th>
+          <th>不参加</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -376,13 +377,16 @@ function seatCell(seat){
 }
 
 /* ===== 回答一覧（Q5要約の編集） ===== */
+/* ===== 回答一覧（Q5要約の編集） ===== */
 function renderAnswers(rows){
   const tb = document.querySelector("#answerTable tbody");
   tb.innerHTML = "";
+
   rows.forEach((r,i)=>{
     const id = esc(r.id || "");
     const short = esc(r.q5_short || "");
-    const original = esc(r.q5 || ""); // ← 追加（原文）
+    const original = esc(r.q5 || "");
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i+1}</td>
@@ -392,15 +396,39 @@ function renderAnswers(rows){
       <td>${yn(r.q3)}</td>
       <td>${yn(r.q4)}</td>
       <td>${short}</td>
+
       <td class="edit">
         <input class="editbox" id="q5s_${id}" value="${short}" maxlength="12" />
         <button class="mini-btn btn-secondary" onclick="saveQ5Short('${id}')">保存</button>
       </td>
-      <td>${original}</td> <!-- ← 追加（原文） -->
+
+      <td>${original}</td>
       <td>${esc(r.created_at || "")}</td>
+
+      <td>
+        <button class="mini-btn btn-danger" onclick="markAbsent('${id}')">不参加</button>
+      </td>
     `;
     tb.appendChild(tr);
   });
+}
+
+async function markAbsent(id){
+  if(!confirm("この参加者を不参加にしますか？")) return;
+
+  const r = await fetch("/api/responses/absent", {
+    method: "PATCH",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ id, is_absent: true })
+  });
+
+  if (!r.ok){
+    alert("不参加処理に失敗しました");
+    return;
+  }
+
+  alert("不参加にしました");
+  loadAll();
 }
 
 async function saveQ5Short(id){

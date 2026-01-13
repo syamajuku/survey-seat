@@ -48,7 +48,8 @@ async function initDb() {
       q4 BOOLEAN NOT NULL,
       q5 TEXT NOT NULL,
       q5_short TEXT,
-      created_at TIMESTAMPTZ DEFAULT now()
+      created_at TIMESTAMPTZ DEFAULT now(),
+      is_absent BOOLEAN NOT NULL DEFAULT false,
     );
   `);
 
@@ -325,8 +326,9 @@ async function upsertSeatOverride({ email, tableNo, pos }) {
 
 async function loadResponses() {
   const { rows } = await pool.query(
-    `SELECT id, email, name, q1, q2, q3, q4, q5, q5_short, created_at
+    `SELECT id, email, name, q1, q2, q3, q4, q5, q5_short, is_absent, created_at
      FROM responses
+     WHERE is_absent = false
      ORDER BY created_at ASC`
   );
   return rows;
@@ -645,6 +647,26 @@ app.post("/api/responses", async (req, res) => {
   record.id = id || record.id;
 
   res.json({ ok: true, record });
+});
+
+// 不参加フラグ更新
+app.patch("/api/responses/absent", async (req, res) => {
+  try {
+    const { id, is_absent } = req.body;
+    if (!id || typeof is_absent !== "boolean") {
+      return res.status(400).json({ ok: false, error: "id and is_absent(boolean) are required" });
+    }
+
+    await pool.query(
+      "UPDATE responses SET is_absent = $2 WHERE id = $1",
+      [id, is_absent]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: "server_error" });
+  }
 });
 
 // 要約Q5を運営が編集
