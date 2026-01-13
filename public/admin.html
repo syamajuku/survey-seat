@@ -92,6 +92,18 @@
       padding:6px 10px; border-radius:8px; font-weight:900; cursor:pointer; border:none;
       margin-left:6px;
     }
+.absent-row { opacity: .55; }
+.absent-row td.name { text-decoration: line-through; }
+.absent-badge {
+  display:inline-block;
+  margin-left:6px;
+  padding:2px 8px;
+  border:1px solid #999;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+}
+
   </style>
 </head>
 
@@ -377,7 +389,6 @@ function seatCell(seat){
 }
 
 /* ===== 回答一覧（Q5要約の編集） ===== */
-/* ===== 回答一覧（Q5要約の編集） ===== */
 function renderAnswers(rows){
   const tb = document.querySelector("#answerTable tbody");
   tb.innerHTML = "";
@@ -386,11 +397,17 @@ function renderAnswers(rows){
     const id = esc(r.id || "");
     const short = esc(r.q5_short || "");
     const original = esc(r.q5 || "");
+    const absent = (r.is_absent === true);
 
     const tr = document.createElement("tr");
+    if (absent) tr.className = "absent-row";
+
     tr.innerHTML = `
       <td>${i+1}</td>
-      <td class="name">${esc(r.name)}</td>
+      <td class="name">
+        ${esc(r.name)}
+        ${absent ? '<span class="absent-badge">不参加</span>' : ''}
+      </td>
       <td>${yn(r.q1)}</td>
       <td>${yn(r.q2)}</td>
       <td>${yn(r.q3)}</td>
@@ -406,30 +423,34 @@ function renderAnswers(rows){
       <td>${esc(r.created_at || "")}</td>
 
       <td>
-        <button class="mini-btn btn-danger" onclick="markAbsent('${id}')">不参加</button>
+        <button class="mini-btn ${absent ? "btn-secondary" : "btn-danger"}"
+          onclick="markAbsent('${id}', ${absent ? "false" : "true"})">
+          ${absent ? "参加に戻す" : "不参加"}
+        </button>
       </td>
     `;
     tb.appendChild(tr);
   });
 }
 
-async function markAbsent(id){
-  if(!confirm("この参加者を不参加にしますか？")) return;
+async function markAbsent(id, nextAbsent){
+  const msg = nextAbsent ? "この参加者を不参加にしますか？" : "この参加者を参加に戻しますか？";
+  if(!confirm(msg)) return;
 
   const r = await fetch("/api/responses/absent", {
     method: "PATCH",
     headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ id, is_absent: true })
+    body: JSON.stringify({ id, is_absent: nextAbsent })
   });
 
   if (!r.ok){
-    alert("不参加処理に失敗しました");
+    alert("更新に失敗しました");
     return;
   }
 
-  alert("不参加にしました");
   loadAll();
 }
+
 
 async function saveQ5Short(id){
   const v = document.getElementById("q5s_" + id)?.value ?? "";

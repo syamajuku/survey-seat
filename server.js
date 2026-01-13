@@ -328,7 +328,6 @@ async function loadResponses() {
   const { rows } = await pool.query(
     `SELECT id, email, name, q1, q2, q3, q4, q5, q5_short, is_absent, created_at
      FROM responses
-     WHERE is_absent = false
      ORDER BY created_at ASC`
   );
   return rows;
@@ -722,22 +721,24 @@ app.delete("/api/manual-seat", async (req, res) => {
 
 // 座席割り当て（運営）
 app.get("/api/assignments", async (req, res) => {
-  const responses = await loadResponses();        // 回答者
+  const responses = await loadResponses();        // 回答者（不参加含む）
   const participants = await loadParticipants();  // 未回答含む名簿
   const overrides = await loadSeatOverrides();    // 手動座席
 
-  // ① まず回答者だけで自動割当
-  const auto = buildTables(responses);
+  // ★追加：座席割り当て対象（不参加は除外）
+  const activeResponses = responses.filter(r => r.is_absent !== true);
 
-  // tables を編集可能にコピー
+  // ① まず回答者だけで自動割当（不参加除外）
+  const auto = buildTables(activeResponses);
+
   const tables = JSON.parse(JSON.stringify(auto.tables));
   const tableMap = new Map(tables.map(t => [t.tableNo, t]));
 
-  // ② 手動座席を上書き
+  // ② 手動座席を上書き（不参加は座席に入れない）
   for (const o of overrides) {
     const email = String(o.email).toLowerCase();
     const p = participants.find(x => x.email === email);
-    const r = responses.find(x => x.email === email);
+    const r = activeResponses.find(x => x.email === email); // ★ここ重要（responses→activeResponses）
 
     const t = tableMap.get(Number(o.table_no));
     if (!t) continue;
@@ -794,7 +795,8 @@ app.get("/api/myseat", async (req, res) => {
     return res.status(400).json({ ok: false, error: "id or name is required" });
   }
 
-  const rows = await loadResponses();
+  const rowsAll = await loadResponses();                 // 不参加を含む可能性
+  const rows = rowsAll.filter(r => r.is_absent !== true); // ★不参加を除外
 
   // id優先。無ければ name で最新を救済（イベント運用での事故対策）
   let targetId = id;
