@@ -24,6 +24,18 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+function getEventId(req) {
+  // どこから来ても拾えるように：query > header > body
+  const q = req.query?.event_id || req.query?.eventId;
+  const h = req.headers["x-event-id"];
+  const b = req.body?.event_id || req.body?.eventId;
+
+  const raw = String(q || h || b || "default").trim();
+  // 事故防止：記号をある程度制限（必要なら緩めてOK）
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(raw)) return "default";
+  return raw;
+}
+
 /* =========================
    DB
 ========================= */
@@ -35,80 +47,6 @@ const pool = new Pool({
       : false,
 });
 
-async function initDb() {
-  // 回答テーブル（既存）
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS responses (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      q1 BOOLEAN NOT NULL,
-      q2 BOOLEAN NOT NULL,
-      q3 BOOLEAN NOT NULL,
-      q4 BOOLEAN NOT NULL,
-      q5 TEXT NOT NULL,
-      q5_short TEXT,
-      created_at TIMESTAMPTZ DEFAULT now(),
-      is_absent BOOLEAN NOT NULL DEFAULT false
-    );
-  `);
-
-await pool.query(`
-  CREATE UNIQUE INDEX IF NOT EXISTS responses_email_unique
-  ON responses(email);
-`);
-
-
-  // 参加者マスタ（未入力者含む）
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS participants (
-      email TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT now()
-    );
-  `);
-
-  // 管理者による手動座席指定
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS manual_seats (
-      email TEXT PRIMARY KEY,
-      table_no INTEGER NOT NULL,
-      pos TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT now()
-    );
-  `);
-
-  // 公開状態（published）を保存する state
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS state (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  // 質問文を保存する questions
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS questions (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  // published が未設定なら false で作る
-  await pool.query(`
-    INSERT INTO state(key, value)
-    VALUES ('published', 'false')
-    ON CONFLICT (key) DO NOTHING
-  `);
-
-  // questions が空ならデフォルト投入
-  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM questions`);
-  if ((rows?.[0]?.n ?? 0) === 0) {
-    const defaults = defaultQuestions();
-    await writeQuestions(defaults);
-  }
-}
-
 function defaultQuestions() {
   return {
     q1: "自分から話題を出して会話をリードすることが好き",
@@ -119,9 +57,91 @@ function defaultQuestions() {
   };
 }
 
+async function initDb() {
+  // 回答テーブル（既存）
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS responses (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL DEFAULT 'default',
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  q1 BOOLEAN NOT NULL,
+  q2 BOOLEAN NOT NULL,
+  q3 BOOLEAN NOT NULL,
+  q4 BOOLEAN NOT NULL,
+  q5 TEXT NOT NULL,
+  q5_short TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  is_absent BOOLEAN NOT NULL DEFAULT false,
+  CONSTRAINT responses_event_email_unique UNIQUE (event_id, email)
+);
+  `);
+
+
+  // 参加者マスタ（未入力者含む）
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS participants (
+   event_id TEXT NOT NULL DEFAULT 'default',
+   email TEXT NOT NULL,
+   name TEXT NOT NULL,
+   created_at TIMESTAMPTZ DEFAULT now()
+  ,PRIMARY KEY (event_id, email)
+);
+  `);
+
+  // 管理者による手動座席指定
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS manual_seats (
+  event_id TEXT NOT NULL DEFAULT 'default',
+  email TEXT NOT NULL,
+   table_no INTEGER NOT NULL,
+   pos TEXT NOT NULL,
+   created_at TIMESTAMPTZ DEFAULT now()
+  ,PRIMARY KEY (event_id, email)
+);
+  `);
+
+  // 公開状態（published）を保存する state
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS state (
+  event_id TEXT NOT NULL DEFAULT 'default',
+  key TEXT NOT NULL,
+   value TEXT NOT NULL
+  ,PRIMARY KEY (event_id, key)
+);
+  `);
+
+  // 質問文を保存する questions
+  await pool.query(`
+CREATE TABLE IF NOT EXISTS questions (
+  event_id TEXT NOT NULL DEFAULT 'default',
+  key TEXT NOT NULL,
+   value TEXT NOT NULL
+  ,PRIMARY KEY (event_id, key)
+);
+  `);
+
+  // published が未設定なら false で作る（defaultイベント）
+  await pool.query(`
+    INSERT INTO state(event_id, key, value)
+    VALUES ('default', 'published', 'false')
+    ON CONFLICT (event_id, key) DO NOTHING;
+  `);
+
+  // questions が空ならデフォルト投入（defaultイベント）
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM questions WHERE event_id='default'`
+  );
+  if ((rows?.[0]?.n ?? 0) === 0) {
+    const defaults = defaultQuestions();
+    await writeQuestions("default", defaults);
+  }
+}
+
 /* =========================
    Helpers
 ========================= */
+
 function cryptoRandomId() {
   return (
     Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2)
@@ -196,8 +216,12 @@ async function summarizeByAI(text, maxLen = 5) {
 /* =========================
    DB accessors
 ========================= */
-async function readQuestions() {
-  const { rows } = await pool.query(`SELECT key, value FROM questions`);
+async function readQuestions(eventId) {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM questions WHERE event_id = $1`,
+    [eventId]
+  );
+
   const map = {};
   for (const r of rows) map[r.key] = r.value;
 
@@ -211,7 +235,7 @@ async function readQuestions() {
   };
 }
 
-async function writeQuestions(q) {
+async function writeQuestions(eventId, q) {
   const next = {
     q1: String(q.q1 ?? ""),
     q2: String(q.q2 ?? ""),
@@ -220,7 +244,6 @@ async function writeQuestions(q) {
     q5: String(q.q5 ?? ""),
   };
 
-  // 空文字防止（未入力ならデフォルトに戻す）
   const d = defaultQuestions();
   for (const k of ["q1", "q2", "q3", "q4", "q5"]) {
     if (!next[k] || !next[k].trim()) next[k] = d[k];
@@ -229,44 +252,49 @@ async function writeQuestions(q) {
   for (const [key, value] of Object.entries(next)) {
     await pool.query(
       `
-      INSERT INTO questions(key, value)
-      VALUES ($1, $2)
-      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+      INSERT INTO questions(event_id, key, value)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (event_id, key) DO UPDATE SET value = EXCLUDED.value
       `,
-      [key, value]
+      [eventId, key, value]
     );
   }
   return next;
 }
 
-async function readState() {
+async function readState(eventId) {
   const { rows } = await pool.query(
-    `SELECT value FROM state WHERE key='published' LIMIT 1`
+    `SELECT value FROM state WHERE event_id = $1 AND key='published' LIMIT 1`,
+    [eventId]
   );
   const published = rows?.[0]?.value === "true";
   return { published };
 }
 
-async function setPublished(published) {
+async function setPublished(eventId, published) {
   await pool.query(
     `
-    INSERT INTO state(key, value)
-    VALUES ('published', $1)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    INSERT INTO state(event_id, key, value)
+    VALUES ($1, 'published', $2)
+    ON CONFLICT (event_id, key) DO UPDATE SET value = EXCLUDED.value
     `,
-    [published ? "true" : "false"]
+    [eventId, published ? "true" : "false"]
   );
   return { published };
 }
-async function loadParticipants() {
+
+async function loadParticipants(eventId) {
   const { rows } = await pool.query(
     `SELECT email, name, created_at
      FROM participants
-     ORDER BY created_at ASC`
+     WHERE event_id = $1
+     ORDER BY created_at ASC`,
+    [eventId]
   );
   return rows;
 }
-async function loadUnresponded() {
+
+async function loadUnresponded(eventId) {
   const { rows } = await pool.query(
     `
     SELECT
@@ -277,85 +305,134 @@ async function loadUnresponded() {
       ms.pos
     FROM participants p
     LEFT JOIN responses r
-      ON r.email = p.email
+      ON r.event_id = p.event_id AND r.email = p.email
     LEFT JOIN manual_seats ms
-      ON ms.email = p.email
-    WHERE r.email IS NULL
+      ON ms.event_id = p.event_id AND ms.email = p.email
+    WHERE p.event_id = $1
+      AND r.email IS NULL
     ORDER BY p.created_at ASC
-    `
+    `,
+    [eventId]
   );
   return rows;
 }
 
-async function upsertParticipantOnly({ email, name }) {
+async function upsertParticipantOnly(eventId, { email, name }) {
   await pool.query(
     `
-    INSERT INTO participants (email, name, created_at)
-    VALUES ($1, $2, now())
-    ON CONFLICT (email) DO UPDATE
+    INSERT INTO participants(event_id, email, name, created_at)
+    VALUES ($1, $2, $3, now())
+    ON CONFLICT (event_id, email) DO UPDATE
       SET name = EXCLUDED.name
     `,
-    [String(email).toLowerCase(), String(name)]
+    [eventId, String(email).toLowerCase(), String(name).trim()]
   );
 }
 
 
-async function deleteSeatOverrideByEmail(email) {
-  await pool.query(`DELETE FROM manual_seats WHERE email = $1`, [
-    String(email).toLowerCase(),
-  ]);
+async function deleteSeatOverrideByEmail(eventId, email) {
+  await pool.query(
+    `DELETE FROM manual_seats WHERE event_id = $1 AND email = $2`,
+    [eventId, String(email).toLowerCase()]
+  );
 }
 
-async function loadSeatOverrides() {
+async function deleteParticipantByEmail(eventId, email) {
+  await pool.query(
+    `DELETE FROM participants WHERE event_id = $1 AND email = $2`,
+    [eventId, String(email).toLowerCase()]
+  );
+}
+
+async function loadSeatOverrides(eventId) {
   const { rows } = await pool.query(
     `SELECT email, table_no, pos
-     FROM manual_seats`
+     FROM manual_seats
+     WHERE event_id = $1`,
+    [eventId]
   );
   return rows;
 }
 
-async function upsertParticipant({ email, name }) {
+async function upsertParticipant(eventId, { email, name }) {
   await pool.query(
     `
-    INSERT INTO participants(email, name)
-    VALUES ($1, $2)
-    ON CONFLICT (email) DO UPDATE
+    INSERT INTO participants(event_id, email, name)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (event_id, email) DO UPDATE
       SET name = EXCLUDED.name
     `,
-    [String(email).toLowerCase(), String(name).trim()]
+    [eventId, String(email).toLowerCase(), String(name).trim()]
   );
 }
 
-async function upsertSeatOverride({ email, tableNo, pos }) {
+
+function normalizeManualBase(name) {
+  // 既存仕様に合わせて：lower + 空白→_
+  const base = String(name ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  return base || "guest";
+}
+
+// 同名でも上書きされないように、eventId 内で衝突しない manual email を採番して作る
+async function createParticipantWithUniqueEmail(eventId, name) {
+  const base = normalizeManualBase(name);
+
+  for (let i = 1; i <= 999; i++) {
+    const suffix = i === 1 ? "" : `-${i}`;
+    const email = `manual-${base}${suffix}@local`;
+
+    // 衝突したら DO NOTHING → rowCount=0 なので次へ
+    const r = await pool.query(
+      `
+      INSERT INTO participants(event_id, email, name, created_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (event_id, email) DO NOTHING
+      RETURNING email
+      `,
+      [String(eventId), String(email).toLowerCase(), String(name).trim()]
+    );
+
+    if (r.rowCount === 1) return r.rows[0].email;
+  }
+
+  throw new Error("email_allocation_failed");
+}
+
+async function upsertSeatOverride(eventId, { email, tableNo, pos }) {
   await pool.query(
     `
-    INSERT INTO manual_seats(email, table_no, pos, created_at)
-    VALUES ($1, $2, $3, now())
-    ON CONFLICT (email) DO UPDATE
+    INSERT INTO manual_seats(event_id, email, table_no, pos, created_at)
+    VALUES ($1, $2, $3, $4, now())
+    ON CONFLICT (event_id, email) DO UPDATE
       SET table_no = EXCLUDED.table_no,
           pos = EXCLUDED.pos,
           created_at = now()
     `,
-    [String(email).toLowerCase(), Number(tableNo), String(pos)]
+    [eventId, String(email).toLowerCase(), Number(tableNo), String(pos)]
   );
 }
 
-async function loadResponses() {
+async function loadResponses(eventId) {
   const { rows } = await pool.query(
     `SELECT id, email, name, q1, q2, q3, q4, q5, q5_short, is_absent, created_at
      FROM responses
-     ORDER BY created_at ASC`
+     WHERE event_id = $1
+     ORDER BY created_at ASC`,
+    [eventId]
   );
   return rows;
 }
 
 // ★変更：email基準で UPSERT（同一メールは同一人物として更新）
-async function upsertResponseByEmail(record) {
+async function upsertResponseByEmail(eventId, record) {
   const { rows } = await pool.query(
     `
-    INSERT INTO responses(id, email, name, q1, q2, q3, q4, q5, q5_short, created_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-    ON CONFLICT (email) DO UPDATE
+    INSERT INTO responses(
+      id, event_id, email, name,
+      q1, q2, q3, q4, q5, q5_short, created_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    ON CONFLICT (event_id, email) DO UPDATE
       SET
         name = EXCLUDED.name,
         q1 = EXCLUDED.q1,
@@ -369,7 +446,8 @@ async function upsertResponseByEmail(record) {
     `,
     [
       record.id,
-      record.email,
+      eventId,          // ★event_id
+      record.email,     // ★email
       record.name,
       record.q1,
       record.q2,
@@ -383,16 +461,21 @@ async function upsertResponseByEmail(record) {
   return rows?.[0]?.id;
 }
 
-async function resetResponses() {
-  await pool.query(`TRUNCATE TABLE responses`);
+async function resetResponses(eventId) {
+  await pool.query(`DELETE FROM responses WHERE event_id = $1`, [eventId]
+  );
 }
 
-async function updateQ5Short(id, q5_short) {
+async function updateQ5Short(eventId, id, q5_short) {
   const short = String(q5_short ?? "").trim();
-  await pool.query(
-    `UPDATE responses SET q5_short = $1 WHERE id = $2`,
-    [short, String(id)]
+  const r = await pool.query(
+    `UPDATE responses
+        SET q5_short = $1
+      WHERE event_id = $2
+        AND id = $3`,
+    [short, String(eventId), String(id)]
   );
+  return r.rowCount;
 }
 
 /* =========================
@@ -580,73 +663,71 @@ function buildTables(rows) {
 
 // 質問文 取得
 app.get("/api/questions", async (req, res) => {
-  const questions = await readQuestions();
-  res.json({ ok: true, questions });
+  const eventId = getEventId(req);
+  const questions = await readQuestions(eventId);
+  res.json({ ok: true, eventId, questions });
 });
 
-// 質問文 更新（運営）
 app.post("/api/questions", async (req, res) => {
-  const saved = await writeQuestions(req.body || {});
-  res.json({ ok: true, questions: saved });
+  const eventId = getEventId(req);
+  const saved = await writeQuestions(eventId, req.body || {});
+  res.json({ ok: true, eventId, questions: saved });
 });
 
 // 回答一覧
 app.get("/api/responses", async (req, res) => {
-  const rows = await loadResponses();
-  res.json({ ok: true, count: rows.length, rows });
+  const eventId = getEventId(req);
+  const rows = await loadResponses(eventId);
+  res.json({ ok: true, eventId, count: rows.length, rows });
 });
 
 // 名簿だけ登録（未入力者）
 app.post("/api/participant", async (req, res) => {
+  const eventId = getEventId(req);
   const name = String(req.body?.name ?? "").trim();
 
   if (!name) {
     return res.status(400).json({ ok: false, error: "name is required" });
   }
 
-  // email を自動生成（内部ID用途）
-  const email = `manual-${crypto.randomUUID()}@local`;
+  // ✅ 同名でも上書きしない：eventId 内で email を衝突回避しながら採番
+  const email = await createParticipantWithUniqueEmail(eventId, name);
 
-  await pool.query(
-    `
-    INSERT INTO participants (email, name, created_at)
-    VALUES ($1, $2, now())
-    `,
-    [email, name]
-  );
-
-  res.json({ ok: true, email });
+  res.json({ ok: true, eventId, email });
 });
+
 
 // 未入力者（participants）を削除（回答済みは削除不可）
 app.delete("/api/participant", async (req, res) => {
+  const eventId = getEventId(req);
   const email = String(req.query?.email ?? "").trim().toLowerCase();
   if (!email) return res.status(400).json({ ok: false, error: "email is required" });
 
-  // 回答済みなら削除禁止
-  const r1 = await pool.query(`SELECT 1 FROM responses WHERE email = $1 LIMIT 1`, [email]);
+  // 回答済みなら削除禁止（event_id で絞る）
+  const r1 = await pool.query(
+    `SELECT 1 FROM responses WHERE event_id = $1 AND email = $2 LIMIT 1`,
+    [eventId, email]
+  );
   if (r1.rowCount > 0) {
     return res.status(400).json({ ok: false, error: "回答済みのため削除できません" });
   }
 
-  // 手動席があれば消す（存在しなくてもOK）
-  await pool.query(`DELETE FROM manual_seats WHERE email = $1`, [email]);
+  // 手動席があれば消す
+  await deleteSeatOverrideByEmail(eventId, email);
 
   // participants を削除
-  const r2 = await pool.query(`DELETE FROM participants WHERE email = $1`, [email]);
+  await deleteParticipantByEmail(eventId, email);
 
-  if (r2.rowCount === 0) {
-    return res.status(404).json({ ok: false, error: "not found" });
-  }
-
-  res.json({ ok: true });
+  res.json({ ok: true, eventId });
 });
+
 
 // 回答登録（参加者）
 // ★変更：email基準 UPSERT
 app.post("/api/responses", async (req, res) => {
-  // ★追加：公開後は回答を受け付けない
-  const st = await readState();
+  const eventId = getEventId(req);
+
+  const st = await readState(eventId);
   if (st.published) {
     return res.status(403).json({
       ok: false,
@@ -661,32 +742,42 @@ app.post("/api/responses", async (req, res) => {
   const q5_short = summarizeFallback(v.value.q5, 5);
 
   const record = {
-    id: cryptoRandomId(),  // INSERT時のみ使用。更新時は既存idが返る
+    id: cryptoRandomId(),
     created_at: now,
     q5_short,
-    ...v.value,            // name, email, q1..q5
+    ...v.value,
   };
 
-  const id = await upsertResponseByEmail(record);
+  const id = await upsertResponseByEmail(eventId, record);
   record.id = id || record.id;
 
-  res.json({ ok: true, record });
+  res.json({ ok: true, eventId, record });
 });
 
 // 不参加フラグ更新
 app.patch("/api/responses/absent", async (req, res) => {
   try {
+    const eventId = getEventId(req);
     const { id, is_absent } = req.body;
+
     if (!id || typeof is_absent !== "boolean") {
-      return res.status(400).json({ ok: false, error: "id and is_absent(boolean) are required" });
+      return res.status(400).json({
+        ok: false,
+        error: "id and is_absent(boolean) are required",
+      });
     }
 
     await pool.query(
-      "UPDATE responses SET is_absent = $2 WHERE id = $1",
-      [id, is_absent]
+      `
+      UPDATE responses
+         SET is_absent = $3
+       WHERE event_id = $1
+         AND id = $2
+      `,
+      [eventId, id, is_absent]
     );
 
-    res.json({ ok: true });
+    res.json({ ok: true, eventId });
   } catch (e) {
     console.error(e);
     res.status(500).json({ ok: false, error: "server_error" });
@@ -695,30 +786,32 @@ app.patch("/api/responses/absent", async (req, res) => {
 
 // 要約Q5を運営が編集
 app.post("/api/q5short", async (req, res) => {
+  const eventId = getEventId(req);
+
   const id = String(req.body?.id ?? "");
   const q5_short = String(req.body?.q5_short ?? "").trim();
   if (!id) return res.status(400).json({ ok: false, error: "id is required" });
 
-  await updateQ5Short(id, q5_short);
-  res.json({ ok: true });
+  const n = await updateQ5Short(eventId, id, q5_short);
+  if (n === 0) {
+    return res.status(404).json({ ok: false, error: "not_found_in_this_event", eventId });
+  }
+
+  res.json({ ok: true, eventId });
 });
+
 app.post("/api/manual-seat", async (req, res) => {
+  const eventId = getEventId(req);
+
   let email = String(req.body?.email ?? "").trim().toLowerCase();
   const name  = String(req.body?.name ?? "").trim();
   const tableNo = Number(req.body?.tableNo);
-  const pos = String(req.body?.pos ?? "").trim(); // "左上" "右上" "左下" "右下"
+  const pos = String(req.body?.pos ?? "").trim();
 
-  // ★変更：email が無ければ自動生成（手動登録/未入力者向け）
-  if (!email) {
-    email = `manual-${crypto.randomUUID()}@local`;
-  }
-
-  // ★変更：厳密すぎないチェック（@があって空白がない程度）
-  // `manual-xxx@local` も通す
+  if (!email) email = `manual-${crypto.randomUUID()}@local`;
   if (/\s/.test(email) || !email.includes("@")) {
     return res.status(400).json({ ok:false, error:"email is invalid" });
   }
-
   if (!name) return res.status(400).json({ ok:false, error:"name is required" });
   if (!Number.isFinite(tableNo) || tableNo <= 0) {
     return res.status(400).json({ ok:false, error:"tableNo is invalid" });
@@ -727,43 +820,43 @@ app.post("/api/manual-seat", async (req, res) => {
     return res.status(400).json({ ok:false, error:"pos is invalid" });
   }
 
-  await upsertParticipant({ email, name });
-  await upsertSeatOverride({ email, tableNo, pos });
+  await upsertParticipant(eventId, { email, name });
+  await upsertSeatOverride(eventId, { email, tableNo, pos });
 
-  // ★追加：採用した email を返す（UI側が必要なら保持できる）
-  res.json({ ok:true, email });
+  res.json({ ok:true, eventId, email });
 });
 
 // 未回答者一覧（運営）
 app.get("/api/unresponded", async (req, res) => {
-  const rows = await loadUnresponded();
-  res.json({ ok: true, count: rows.length, rows });
+  const eventId = getEventId(req);
+  const rows = await loadUnresponded(eventId);
+  res.json({ ok: true, eventId, count: rows.length, rows });
 });
+
 
 // 手動席の解除（運営）
 app.delete("/api/manual-seat", async (req, res) => {
+  const eventId = getEventId(req);
   const email = String(req.query?.email ?? "").trim().toLowerCase();
 
-  // ★変更：厳密すぎないチェック（@があって空白がない程度）
   if (!email || /\s/.test(email) || !email.includes("@")) {
     return res.status(400).json({ ok: false, error: "email is invalid" });
   }
 
-  await deleteSeatOverrideByEmail(email);
-  res.json({ ok: true });
+  await deleteSeatOverrideByEmail(eventId, email);
+  res.json({ ok: true, eventId });
 });
 
 
 // 座席割り当て（運営）
 app.get("/api/assignments", async (req, res) => {
-  const responses = await loadResponses();        // 回答者（不参加含む）
-  const participants = await loadParticipants();  // 未回答含む名簿
-  const overrides = await loadSeatOverrides();    // 手動座席
+  const eventId = getEventId(req);
 
-  // ★追加：座席割り当て対象（不参加は除外）
+  const responses = await loadResponses(eventId);
+  const participants = await loadParticipants(eventId);
+  const overrides = await loadSeatOverrides(eventId);
+
   const activeResponses = responses.filter(r => r.is_absent !== true);
-
-  // ① まず回答者だけで自動割当（不参加除外）
   const auto = buildTables(activeResponses);
 
   const tables = JSON.parse(JSON.stringify(auto.tables));
@@ -806,32 +899,34 @@ app.get("/api/assignments", async (req, res) => {
 
 // 座席公開（運営）
 app.post("/api/publish", async (req, res) => {
+  const eventId = getEventId(req);
   const publish = Boolean(req.body?.publish);
-  const st = await setPublished(publish);
-  res.json({ ok: true, ...st });
+  const st = await setPublished(eventId, publish);
+  res.json({ ok: true, eventId, ...st });
 });
 
-// 公開状態 取得（参加者・運営 共通）
 app.get("/api/publish", async (req, res) => {
-  const st = await readState();
-  res.json({ ok: true, ...st }); // => { ok:true, published:true/false }
+  const eventId = getEventId(req);
+  const st = await readState(eventId);
+  res.json({ ok: true, eventId, ...st });
 });
 
 // 自分の席（参加者）
 // published=false の間は published:false を返す
 app.get("/api/myseat", async (req, res) => {
-  const st = await readState();
-  if (!st.published) return res.json({ ok: true, published: false });
+  const eventId = getEventId(req);
+
+  const st = await readState(eventId);
+  if (!st.published) return res.json({ ok: true, eventId, published: false });
 
   const id = String(req.query.id ?? "").trim();
   const name = String(req.query.name ?? "").trim();
-
   if (!id && !name) {
     return res.status(400).json({ ok: false, error: "id or name is required" });
   }
 
-  const rowsAll = await loadResponses();                 // 不参加を含む可能性
-  const rows = rowsAll.filter(r => r.is_absent !== true); // ★不参加を除外
+  const rowsAll = await loadResponses(eventId);
+  const rows = rowsAll.filter(r => r.is_absent !== true);
 
   // id優先。無ければ name で最新を救済（イベント運用での事故対策）
   let targetId = id;
@@ -870,11 +965,12 @@ app.get("/api/myseat", async (req, res) => {
 
 // 全回答リセット（運営）
 app.post("/api/reset", async (req, res) => {
-  await resetResponses();
-  // 必要なら公開も解除
-  await setPublished(false);
-  res.json({ ok: true });
+  const eventId = getEventId(req);
+  await resetResponses(eventId);
+  await setPublished(eventId, false);
+  res.json({ ok: true, eventId });
 });
+
 
 // ヘルスチェック
 app.get("/api/health", async (req, res) => {
