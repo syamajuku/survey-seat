@@ -1,0 +1,11 @@
+# Firebase App Hosting の設定（survey-seat）
+runConfig:
+  minInstances: 0   # 使っていないときは止めて費用をかけない
+  maxInstances: 1
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # OpenAI の API キーは Secret Manager に「openai-api-key」として登録する
+  - variable: OPENAI_API_KEY
+    secret: openai-api-key
